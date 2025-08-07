@@ -28,15 +28,15 @@ namespace Debug_n
             },
             .motor_type = Motor_General_Def_n::M3508,
             .can_init_config = {
-              .can_handle = &hcan1,
-              .tx_id = 4,// 看电调闪几下就填几
+              .can_handle = &hcan2,
+              .tx_id = 3,// 看电调闪几下就填几
             }
         };
         this->test_motor = new DJI_Motor_n::DJI_Motor_Instance(config);
         __enable_irq();
 
         this->test_motor->DJIMotorEnable();
-        this->test_motor->DJIMotorSetRef(10.0);
+        this->test_motor->DJIMotorSetRef(1000.0);
     }
 
     void Debug_c::Loop1(void)

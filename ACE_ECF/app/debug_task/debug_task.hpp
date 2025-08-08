@@ -2,6 +2,7 @@
 #define __DEBUG_TASK_HPP
 
 #include "DJI_motor.hpp"
+#include "fire.hpp"
 
 namespace Debug_n
 {
@@ -23,7 +24,8 @@ namespace Debug_n
 
         void Loop1(void);
     private:
-        DJI_Motor_n::DJI_Motor_Instance *test_motor;
+        // DJI_Motor_n::DJI_Motor_Instance *test_motor;
+        Fire_n::Fire_c *fire;
     };
 
 }

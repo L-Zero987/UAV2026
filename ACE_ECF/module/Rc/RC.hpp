@@ -30,7 +30,7 @@ public:
     uint8_t VTM_RX_Buffer[2][VTM_FRAME_LENGTH*2] = {0};
     RC_ctrl_t RCData = {0};
     RC_ctrl_t Dt7 = {0};
-    REFEREE_t REFEREE = {0};
+    REFEREE_t REFFEREE = {0};
     remote_data_t VTM = {0};
     Forward_ctrl_t Forward_ctrl = {0};
     uint16_t deadline_limt[5] = {RC_DEAD_LINE, RC_DEAD_LINE, RC_DEAD_LINE, RC_DEAD_LINE, RC_DEAD_LINE}; // 遥控数据死区限制
@@ -40,7 +40,7 @@ public:
     Safe_task_c *DT7_Safe;
     Safe_task_c *TC_Safe;
     Safe_task_c *RE_Safe;
-    errorFlag errorFlag = {0};
+    errorFlag error_flag = {0};
 
     void Dt7_Clear(void);
     void VTM_Clear(void);
@@ -52,7 +52,7 @@ public:
     }
     REFEREE_t *getREdata()
     {
-        return &REFEREE;
+        return &REFFEREE;
     }
     static ECF_RC *getInstance()
     {
@@ -65,7 +65,7 @@ public:
     void ECF_REFEREE_Init();
     void ECF_VTM_Init();
     void DT7_DataProcess(uint8_t *pData, uint16_t psize);
-    void REFEREE_DataProcess();
+    void REFFEREE_DataProcess();
     void VTM_DataProcess();
     void RefereeDataCRC16Deal(void *RefereeData, uint8_t*frame_header, uint8_t data_length);
     void VTMDataCRC16Deal(void *VTMData, uint8_t*frame_header);
@@ -78,5 +78,5 @@ void ECF_RC_Init();
 void ECF_REFEREE_Init();
 void ECF_VTM_Init();
 void ECFRC_Init();
-const REFEREE_t* Get_REFEREE(void);
+const REFEREE_t* Get_REFFEREE(void);
 #endif

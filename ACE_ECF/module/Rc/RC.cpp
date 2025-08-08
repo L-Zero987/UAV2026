@@ -43,7 +43,7 @@ void ECF_RC::Dt7_Clear(void)
     this->Dt7.kb.key_code = 0;
     this->Dt7.mouse = {0};
     memset(this->Dt7.rc.ch, 0, sizeof(int16_t) * 5);
-    this->errorFlag.bit.dr16 = 0;
+    this->error_flag.bit.dr16 = 0;
     this->Dt7.rc.s1 = RC_SW_DOWN;
     this->Dt7.rc.s2 = RC_SW_MID;
 
@@ -52,7 +52,7 @@ void ECF_RC::Dt7_Clear(void)
 
 static void Dt7_Online()
 {
-    ECF_RC::ECF_RC_instance.errorFlag.bit.dr16 = 1;
+    ECF_RC::ECF_RC_instance.error_flag.bit.dr16 = 1;
 }
 
 /*dr16回调函数*/
@@ -90,28 +90,28 @@ void ECF_RC_Init()
 
 // Safe_task_c TC_Safe("TC", 100, TC_disonline_clear, nullptr);
 
-#ifdef RECIVE_REFEREE
+#ifdef RECIVE_REFFEREE
 /*裁判系统回调函数*/
 void REFEREEcallback(uint8_t *pdata, uint16_t psize)// 裁判系统数据回调函数
 {
-    memcpy(ECF_RC::ECF_RC_instance.REFEREE.RefereeData, pdata, psize);
-    ECF_RC::ECF_RC_instance.REFEREE.DataLen = psize;
-    ECF_RC::ECF_RC_instance.REFEREE_DataProcess();
+    memcpy(ECF_RC::ECF_RC_instance.REFFEREE.RefereeData, pdata, psize);
+    ECF_RC::ECF_RC_instance.REFFEREE.DataLen = psize;
+    ECF_RC::ECF_RC_instance.REFFEREE_DataProcess();
 }
 static void RE_Online()
 {
-    ECF_RC::ECF_RC_instance.errorFlag.bit.referee = 1;
+    ECF_RC::ECF_RC_instance.error_flag.bit.referee = 1;
 }
 void ECF_RC::RE_Clear(void)
 {
-    this->errorFlag.bit.referee = 0;
+    this->error_flag.bit.referee = 0;
 
-    this->REFEREE.PHOTO_ctrl.kb.key_code = 0;
-    this->REFEREE.PHOTO_ctrl.mouse.press_l = 0;
-    this->REFEREE.PHOTO_ctrl.mouse.press_r = 0;
-    this->REFEREE.PHOTO_ctrl.mouse.x = 0;
-    this->REFEREE.PHOTO_ctrl.mouse.y = 0;
-    this->REFEREE.PHOTO_ctrl.mouse.z = 0;
+    this->REFFEREE.PHOTO_ctrl.kb.key_code = 0;
+    this->REFFEREE.PHOTO_ctrl.mouse.press_l = 0;
+    this->REFFEREE.PHOTO_ctrl.mouse.press_r = 0;
+    this->REFFEREE.PHOTO_ctrl.mouse.x = 0;
+    this->REFFEREE.PHOTO_ctrl.mouse.y = 0;
+    this->REFFEREE.PHOTO_ctrl.mouse.z = 0;
 }
 static void RE_disonline_clear(void)
 {
@@ -121,7 +121,7 @@ void ECF_RC::ECF_REFEREE_Init()
 {
     // 裁判系统串口配置
     USART_N::usart_init_t referee_uart_param = {
-            .usart_handle_ = &REFEREE_USART,
+            .usart_handle_ = &REFFEREE_USART,
             .rxbuf_size_ = REFEREE_RX_Buffer_Num,    // 接收区大小
             .rx_type_ = USART_N::USART_RX_DMA_IDLE_D,// 接收类型 USART_RX_DMA_IDLE
             .tx_type_ = USART_N::USART_TX_DMA,       // 发送类型
@@ -130,7 +130,7 @@ void ECF_RC::ECF_REFEREE_Init()
             .rx_buff_ptr_ = ECF_RC::ECF_RC_instance.Referee_RX_Buffer[0],
             .secondebuf_ptr_ = ECF_RC::ECF_RC_instance.Referee_RX_Buffer[1]};
     referee = new USART_N::usart_c(referee_uart_param);
-    RE_Safe = new Safe_task_c("RE", 500,  RE_Online);
+    RE_Safe = new Safe_task_c("RE", 500, RE_disonline_clear, RE_Online);
     referee->USART_rx_start();
 }
 void ECF_REFEREE_Init()
@@ -143,14 +143,14 @@ void ECF_REFEREE_Init()
 /*图传接收端回调函数*/
 void VTMcallback(uint8_t *pdata, uint16_t psize)
 {
-    memcpy(ECF_RC::ECF_RC_instance.REFEREE.RefereeData, pdata, psize);
-    ECF_RC::ECF_RC_instance.REFEREE.DataLen = psize;
-    ECF_RC::ECF_RC_instance.REFEREE_DataProcess();
+    memcpy(ECF_RC::ECF_RC_instance.REFFEREE.RefereeData, pdata, psize);
+    ECF_RC::ECF_RC_instance.REFFEREE.DataLen = psize;
+    ECF_RC::ECF_RC_instance.REFFEREE_DataProcess();
     // ECF_RC::ECF_RC_instance.VTM_DataProcess();
 }
 static void VTM_Online()
 {
-    ECF_RC::getInstance()->errorFlag.bit.photo = 1;
+    ECF_RC::getInstance()->error_flag.bit.photo = 1;
 }
 void ECF_RC::VTM_Clear(void)
 {
@@ -165,7 +165,7 @@ void ECF_RC::VTM_Clear(void)
 static void VTM_disonline_clear(void)
 {
     ECF_RC::getInstance()->VTM_Clear();
-    ECF_RC::getInstance()->errorFlag.bit.photo = 0;
+    ECF_RC::getInstance()->error_flag.bit.photo = 0;
 }
 void ECF_RC::ECF_VTM_Init()
 {
@@ -235,7 +235,7 @@ void ECF_RC::RefereeDataCRC16Deal(void *RefereeData, uint8_t *frame_header,
         memcpy(RefereeData, &frame_header[HEADER_LEN + CMDID_LEN], data_length);
         // 操作数据结构体内error，data_length不考虑数据结构体内error占用，因此指针移动后指向error所在字节
         memset(RefereeDataU8 + data_length, 0, sizeof(uint8_t));
-#ifdef RECIVE_REFEREE
+#ifdef RECIVE_REFFEREE
         RE_Safe->Online();
 #endif
 #ifdef RECIVE_VTM_CONTROL
@@ -262,26 +262,26 @@ void ECF_RC::Updata_ctrl(bool Recive_forward)
 {
     if (Recive_forward) {
         this->RCData.kb.key_code = this->Dt7.kb.key_code |
-                                   this->REFEREE.PHOTO_ctrl.kb.key_code |
+                                   this->REFFEREE.PHOTO_ctrl.kb.key_code |
                                    this->VTM.key |
                                    Forward_ctrl.Struct.key_code;
         this->RCData.mouse.x = this->Dt7.mouse.x |
-                               this->REFEREE.PHOTO_ctrl.mouse.x |
+                               this->REFFEREE.PHOTO_ctrl.mouse.x |
                                this->VTM.mouse_x |
                                Forward_ctrl.Struct.mouseX;
         this->RCData.mouse.y = this->Dt7.mouse.y |
-                               -(this->REFEREE.PHOTO_ctrl.mouse.y) |
+                               -(this->REFFEREE.PHOTO_ctrl.mouse.y) |
                                this->VTM.mouse_y |
                                Forward_ctrl.Struct.mouseY;
         this->RCData.mouse.z = this->Dt7.mouse.z |
-                               this->REFEREE.PHOTO_ctrl.mouse.z |
+                               this->REFFEREE.PHOTO_ctrl.mouse.z |
                                this->VTM.mouse_z;
         this->RCData.mouse.press_l = this->Dt7.mouse.press_l |
-                                     this->REFEREE.PHOTO_ctrl.mouse.press_l |
+                                     this->REFFEREE.PHOTO_ctrl.mouse.press_l |
                                      this->VTM.mouse_left |
                                      this->Forward_ctrl.Struct.mouseL_And_ch4_Set;
         this->RCData.mouse.press_r = this->Dt7.mouse.press_r |
-                                     this->REFEREE.PHOTO_ctrl.mouse.press_r |
+                                     this->REFFEREE.PHOTO_ctrl.mouse.press_r |
                                      this->VTM.mouse_right |
                                      this->Forward_ctrl.Struct.mouseR;
         this->RCData.rc = this->Dt7.rc;
@@ -303,17 +303,17 @@ void ECF_RC::Updata_ctrl(bool Recive_forward)
         this->RCData.vtm.button.trigger = this->VTM.trigger;
     } else {
         this->RCData.kb.key_code =
-                this->Dt7.kb.key_code | this->REFEREE.PHOTO_ctrl.kb.key_code;
+                this->Dt7.kb.key_code | this->REFFEREE.PHOTO_ctrl.kb.key_code;
         this->RCData.mouse.x =
-                this->Dt7.mouse.x | this->REFEREE.PHOTO_ctrl.mouse.x;
+                this->Dt7.mouse.x | this->REFFEREE.PHOTO_ctrl.mouse.x;
         this->RCData.mouse.y =
-                -(this->Dt7.mouse.y | this->REFEREE.PHOTO_ctrl.mouse.y);
+                -(this->Dt7.mouse.y | this->REFFEREE.PHOTO_ctrl.mouse.y);
         this->RCData.mouse.z =
-                this->Dt7.mouse.z | this->REFEREE.PHOTO_ctrl.mouse.z;
+                this->Dt7.mouse.z | this->REFFEREE.PHOTO_ctrl.mouse.z;
         this->RCData.mouse.press_l =
-                this->Dt7.mouse.press_l | this->REFEREE.PHOTO_ctrl.mouse.press_l;
+                this->Dt7.mouse.press_l | this->REFFEREE.PHOTO_ctrl.mouse.press_l;
         this->RCData.mouse.press_r =
-                this->Dt7.mouse.press_r | this->REFEREE.PHOTO_ctrl.mouse.press_r;
+                this->Dt7.mouse.press_r | this->REFFEREE.PHOTO_ctrl.mouse.press_r;
         this->RCData.mouse.press_m = this->VTM.mouse_middle;
 
         this->RCData.rc = this->Dt7.rc;
@@ -406,22 +406,22 @@ void ECF_RC::DT7_DataProcess(uint8_t *pData, uint16_t psize)
  * @brief 图传控制/裁判系统共用数据解析
  * @note  图传控制一次转发
  */
-void ECF_RC::REFEREE_DataProcess()
+void ECF_RC::REFFEREE_DataProcess()
 {
     uint8_t i;
-    for (i = 0; i < REFEREE.DataLen; i++) {
-        if (REFEREE.RefereeData[i] == 0xA5) {// 帧头
-            if (Verify_CRC8_Check_Sum(&REFEREE.RefereeData[i], HEADER_LEN) ==
+    for (i = 0; i < REFFEREE.DataLen; i++) {
+        if (REFFEREE.RefereeData[i] == 0xA5) {// 帧头
+            if (Verify_CRC8_Check_Sum(&REFFEREE.RefereeData[i], HEADER_LEN) ==
                 1) {// 帧头CRC8校验
-                REFEREE.RealLen = ((REFEREE.RefereeData[i + 1]) |
-                                    (REFEREE.RefereeData[i + 2] << 8));
-                REFEREE.Cmd_ID =
-                        ((REFEREE.RefereeData[i + HEADER_LEN]) |
-                         (REFEREE.RefereeData[i + HEADER_LEN + 1] << 8));// 命令码ID
-                switch (REFEREE.Cmd_ID) {
+                REFFEREE.RealLen = ((REFFEREE.RefereeData[i + 1]) |
+                                    (REFFEREE.RefereeData[i + 2] << 8));
+                REFFEREE.Cmd_ID =
+                        ((REFFEREE.RefereeData[i + HEADER_LEN]) |
+                         (REFFEREE.RefereeData[i + HEADER_LEN + 1] << 8));// 命令码ID
+                switch (REFFEREE.Cmd_ID) {
                     case ID_PICTURE_TRANSMISSION://把图传链路放前面，优化解析速度
-                        RefereeDataCRC16Deal(&this->REFEREE.PHOTO_ctrl,
-                                             &REFEREE.RefereeData[i],
+                        RefereeDataCRC16Deal(&this->REFFEREE.PHOTO_ctrl,
+                                             &REFFEREE.RefereeData[i],
                                              DATA_PICTURE_TRANSMISSION_LEN);
                         i = i + (DATA_PICTURE_TRANSMISSION_LEN + 9) - 1;
 
@@ -435,128 +435,128 @@ void ECF_RC::REFEREE_DataProcess()
 
                         break;
                     case ID_STATE:
-                        RefereeDataCRC16Deal(&this->REFEREE.Game_Status,
-                                             &REFEREE.RefereeData[i], DATA_STATUS_LEN);
+                        RefereeDataCRC16Deal(&this->REFFEREE.Game_Status,
+                                             &REFFEREE.RefereeData[i], DATA_STATUS_LEN);
                         i = i + (DATA_STATUS_LEN + 9) + 9 - 1;
                         break;
                     case ID_RESULT:
-                        RefereeDataCRC16Deal(&this->REFEREE.Game_Result,
-                                             &REFEREE.RefereeData[i], DATA_RESULT_LEN);
+                        RefereeDataCRC16Deal(&this->REFFEREE.Game_result,
+                                             &REFFEREE.RefereeData[i], DATA_RESULT_LEN);
                         i = i + (DATA_RESULT_LEN + 9) - 1;
                         break;
                     case ID_ROBOT_HP:
-                        RefereeDataCRC16Deal(&this->REFEREE.Robot_HP,
-                                             &REFEREE.RefereeData[i], DATA_ROBOT_HP_LEN);
+                        RefereeDataCRC16Deal(&this->REFFEREE.Robot_HP,
+                                             &REFFEREE.RefereeData[i], DATA_ROBOT_HP_LEN);
                         i = i + (DATA_ROBOT_HP_LEN + 9) - 1;
                         break;
                     case ID_EVENT_DATA:
-                        RefereeDataCRC16Deal(&this->REFEREE.Event_Data,
-                                             &REFEREE.RefereeData[i], DATA_EVENT_DATA_LEN);
+                        RefereeDataCRC16Deal(&this->REFFEREE.Event_Data,
+                                             &REFFEREE.RefereeData[i], DATA_EVENT_DATA_LEN);
                         i = i + (DATA_EVENT_DATA_LEN + 9) - 1;
                         break;
                     case ID_SUPPLY_PROJECTILE_ACTION:
-                        RefereeDataCRC16Deal(&this->REFEREE.Supply_Action,
-                                             &REFEREE.RefereeData[i],
+                        RefereeDataCRC16Deal(&this->REFFEREE.Supply_Action,
+                                             &REFFEREE.RefereeData[i],
                                              DATA_SUPPLY_PROJECTILE_ACTION_LEN);
                         i = i + (DATA_SUPPLY_PROJECTILE_ACTION_LEN + 9) - 1;
                         break;
                     case ID_REFEREE_WARNING:
-                        RefereeDataCRC16Deal(&this->REFEREE.Referee_Warning,
-                                             &REFEREE.RefereeData[i],
+                        RefereeDataCRC16Deal(&this->REFFEREE.Referee_warning,
+                                             &REFFEREE.RefereeData[i],
                                              DATA_REFEREE_WARNING_LEN);
                         i = i + (DATA_REFEREE_WARNING_LEN + 9) - 1;
                         break;
                     case ID_DART_REMAINING_TIME:
-                        RefereeDataCRC16Deal(&this->REFEREE.Dart_Remaining_Time,
-                                             &REFEREE.RefereeData[i],
+                        RefereeDataCRC16Deal(&this->REFFEREE.Dart_Remaining_Time,
+                                             &REFFEREE.RefereeData[i],
                                              DATA_DART_REMAINING_TIME_LEN);
                         i = i + (DATA_DART_REMAINING_TIME_LEN + 9) - 1;
                         break;
                     case ID_ROBOT_STATE:
-                        RefereeDataCRC16Deal(&this->REFEREE.Robot_Status,
-                                             &REFEREE.RefereeData[i], DATA_ROBOT_STATUS_LEN);
+                        RefereeDataCRC16Deal(&this->REFFEREE.Robot_Status,
+                                             &REFFEREE.RefereeData[i], DATA_ROBOT_STATUS_LEN);
                         i = i + (DATA_ROBOT_STATUS_LEN + 9) - 1;
                         break;
                     case ID_POWER_HEAT_DATA:
-                        RefereeDataCRC16Deal(&this->REFEREE.Power_Heat,
-                                             &REFEREE.RefereeData[i],
+                        RefereeDataCRC16Deal(&this->REFFEREE.Power_Heat,
+                                             &REFFEREE.RefereeData[i],
                                              DATA_POWER_HEAT_DATA_LEN);
                         i = i + (DATA_POWER_HEAT_DATA_LEN + 9) - 1;
                         break;
                     case ID_ROBOT_POS:
-                        RefereeDataCRC16Deal(&this->REFEREE.Robot_Position,
-                                             &REFEREE.RefereeData[i], DATA_ROBOT_POS_LEN);
+                        RefereeDataCRC16Deal(&this->REFFEREE.Robot_Position,
+                                             &REFFEREE.RefereeData[i], DATA_ROBOT_POS_LEN);
                         i = i + (DATA_ROBOT_POS_LEN + 9) - 1;
                         break;
                     case ID_BUFF:
-                        RefereeDataCRC16Deal(&this->REFEREE.Buff, &REFEREE.RefereeData[i],
+                        RefereeDataCRC16Deal(&this->REFFEREE.Buff, &REFFEREE.RefereeData[i],
                                              DATA_BUFF_LEN);
                         i = i + (DATA_BUFF_LEN + 9) - 1;
                         break;
                     case ID_AERIAL_ROBOT_ENERGY:
-                        RefereeDataCRC16Deal(&this->REFEREE.Aerial_Energy,
-                                             &REFEREE.RefereeData[i],
+                        RefereeDataCRC16Deal(&this->REFFEREE.Aerial_Energy,
+                                             &REFFEREE.RefereeData[i],
                                              DATA_AERIAL_ROBOT_ENERGY_LEN);
                         i = i + (DATA_AERIAL_ROBOT_ENERGY_LEN + 9) - 1;
                         break;
                     case ID_ROBOT_HURT:
-                        RefereeDataCRC16Deal(&this->REFEREE.Robot_Hurt,
-                                             &REFEREE.RefereeData[i], DATA_ROBOT_HURT_LEN);
+                        RefereeDataCRC16Deal(&this->REFFEREE.Robot_Hurt,
+                                             &REFFEREE.RefereeData[i], DATA_ROBOT_HURT_LEN);
                         i = i + (DATA_ROBOT_HURT_LEN + 9) - 1;
                         break;
                     case ID_SHOOT_DATA:
-                        RefereeDataCRC16Deal(&this->REFEREE.Shoot_Data,
-                                             &REFEREE.RefereeData[i], DATA_SHOOT_DATA_LEN);
+                        RefereeDataCRC16Deal(&this->REFFEREE.Shoot_Data,
+                                             &REFFEREE.RefereeData[i], DATA_SHOOT_DATA_LEN);
                         i = i + (DATA_SHOOT_DATA_LEN + 9) - 1;
                         break;
                     case ID_BULLET_REMAINING:
-                        RefereeDataCRC16Deal(&this->REFEREE.Bullet_Num,
-                                             &REFEREE.RefereeData[i],
+                        RefereeDataCRC16Deal(&this->REFFEREE.Bullet_Num,
+                                             &REFFEREE.RefereeData[i],
                                              DATA_BULLET_REMAINING_LEN);
                         i = i + (DATA_BULLET_REMAINING_LEN + 9) - 1;
                         break;
                     case ID_RFID_STATUS:
-                        RefereeDataCRC16Deal(&this->REFEREE.RFID_Status,
-                                             &REFEREE.RefereeData[i], DATA_RFID_STATUS_LEN);
+                        RefereeDataCRC16Deal(&this->REFFEREE.RFID_Status,
+                                             &REFFEREE.RefereeData[i], DATA_RFID_STATUS_LEN);
                         i = i + (DATA_RFID_STATUS_LEN + 9) - 1;
                         break;
                     case ID_DART_CLIENT_CMD:
-                        RefereeDataCRC16Deal(&this->REFEREE.Dart_Client,
-                                             &REFEREE.RefereeData[i],
+                        RefereeDataCRC16Deal(&this->REFFEREE.Dart_Client,
+                                             &REFFEREE.RefereeData[i],
                                              DATA_DART_CLIENT_CMD_LEN);
                         i = i + (DATA_DART_CLIENT_CMD_LEN + 9) - 1;
                         break;
                     case ID_GROUND_ROBOT_POSITION:
-                        RefereeDataCRC16Deal(&this->REFEREE.Robot_Position_Al,
-                                             &REFEREE.RefereeData[i],
+                        RefereeDataCRC16Deal(&this->REFFEREE.Robot_Position_Al,
+                                             &REFFEREE.RefereeData[i],
                                              DATA_ROBOT_POSITION_LEN);
                         i = i + (DATA_ROBOT_POSITION_LEN + 9) - 1;
                         break;
                     case ID_RARD_MRAK_DATA:
-                        RefereeDataCRC16Deal(&this->REFEREE.radar_mark,
-                                             &REFEREE.RefereeData[i], DATA_RADAR_MARK_LEN);
+                        RefereeDataCRC16Deal(&this->REFFEREE.radar_mark,
+                                             &REFFEREE.RefereeData[i], DATA_RADAR_MARK_LEN);
                         i = i + (DATA_RADAR_MARK_LEN + 9) - 1;
                         break;
                     case ID_SENTRY:
-                        RefereeDataCRC16Deal(&this->REFEREE.sentry, &REFEREE.RefereeData[i],
+                        RefereeDataCRC16Deal(&this->REFFEREE.sentry, &REFFEREE.RefereeData[i],
                                              DATA_SENTRY_INFO_LEN);
                         i = i + (DATA_SENTRY_INFO_LEN + 9) - 1;
                         break;
                     case ID_RADAR:
-                        RefereeDataCRC16Deal(&this->REFEREE.radar_info,
-                                             &REFEREE.RefereeData[i], DATA_RADAR_INFO_LEN);
+                        RefereeDataCRC16Deal(&this->REFFEREE.radar_info,
+                                             &REFFEREE.RefereeData[i], DATA_RADAR_INFO_LEN);
                         i = i + (DATA_RADAR_INFO_LEN + 9) - 1;
                         break;
                     // case 0x301:
                     case ID_DIY_CONTROLLER:
-                        RefereeDataCRC16Deal(&this->REFEREE.DIY_control,
-                                             &REFEREE.RefereeData[i],
+                        RefereeDataCRC16Deal(&this->REFFEREE.DIY_control,
+                                             &REFFEREE.RefereeData[i],
                                              DATA_DIY_CONTROLLER_LEN);
                         i = i + (DATA_DIY_CONTROLLER_LEN + 9) - 1;
                         break;
                     case ID_CLIENT_DOWMLOAD:// 修订
-                        RefereeDataCRC16Deal(&this->REFEREE.ClientMapData,
-                                             &REFEREE.RefereeData[i],
+                        RefereeDataCRC16Deal(&this->REFFEREE.ClientMapData,
+                                             &REFFEREE.RefereeData[i],
                                              DATA_CLIENT_DOWMLOAD_LEN);
                         i = i + (DATA_CLIENT_DOWMLOAD_LEN + 9) - 1;
                         break;
@@ -566,10 +566,10 @@ void ECF_RC::REFEREE_DataProcess()
             }
         }
 #ifdef RECIVE_VTM_CONTROL
-        else if (i != (REFEREE.DataLen - 1) && REFEREE.RefereeData[i] == 0xA9 &&
-                 REFEREE.RefereeData[i + 1] == 0x53) {//VT13遥控数据解析
-            if (Verify_CRC16_Check_Sum(&REFEREE.RefereeData[i], 21) == 1) {
-                memcpy(&this->VTM, &REFEREE.RefereeData[i], 21);
+        else if (i != (REFFEREE.DataLen - 1) && REFFEREE.RefereeData[i] == 0xA9 &&
+                 REFFEREE.RefereeData[i + 1] == 0x53) {//VT13遥控数据解析
+            if (Verify_CRC16_Check_Sum(&REFFEREE.RefereeData[i], 21) == 1) {
+                memcpy(&this->VTM, &REFFEREE.RefereeData[i], 21);
                 VTM.ch[0] = ((int16_t) VTM.ch_0) - RC_CH_VALUE_OFFSET;
                 VTM.ch[1] = ((int16_t) VTM.ch_1) - RC_CH_VALUE_OFFSET;
                 VTM.ch[2] = ((int16_t) VTM.ch_2) - RC_CH_VALUE_OFFSET;
@@ -590,18 +590,18 @@ void ECF_RC::REFEREE_DataProcess()
 void ECF_RC::VTM_DataProcess()
 {
     uint8_t i;
-    for (i = 0; i < REFEREE.DataLen; i++) {
-        if (REFEREE.RefereeData[i] == 0xA5) {                                     // 帧头
-            if (Verify_CRC8_Check_Sum(&REFEREE.RefereeData[i], HEADER_LEN) == 1) {// 帧头CRC8校验
-                REFEREE.RealLen = ((REFEREE.RefereeData[i + 1]) |
-                                    (REFEREE.RefereeData[i + 2] << 8));
-                REFEREE.Cmd_ID =
-                        ((REFEREE.RefereeData[i + HEADER_LEN]) |
-                         (REFEREE.RefereeData[i + HEADER_LEN + 1] << 8));// 命令码ID
-                switch (REFEREE.Cmd_ID) {
+    for (i = 0; i < REFFEREE.DataLen; i++) {
+        if (REFFEREE.RefereeData[i] == 0xA5) {                                     // 帧头
+            if (Verify_CRC8_Check_Sum(&REFFEREE.RefereeData[i], HEADER_LEN) == 1) {// 帧头CRC8校验
+                REFFEREE.RealLen = ((REFFEREE.RefereeData[i + 1]) |
+                                    (REFFEREE.RefereeData[i + 2] << 8));
+                REFFEREE.Cmd_ID =
+                        ((REFFEREE.RefereeData[i + HEADER_LEN]) |
+                         (REFFEREE.RefereeData[i + HEADER_LEN + 1] << 8));// 命令码ID
+                switch (REFFEREE.Cmd_ID) {
                     case ID_PICTURE_TRANSMISSION:
-                        RefereeDataCRC16Deal(&this->REFEREE.PHOTO_ctrl,
-                                             &REFEREE.RefereeData[i],
+                        RefereeDataCRC16Deal(&this->REFFEREE.PHOTO_ctrl,
+                                             &REFFEREE.RefereeData[i],
                                              DATA_PICTURE_TRANSMISSION_LEN);
                         i = i + (DATA_PICTURE_TRANSMISSION_LEN + 9) - 1;
 
@@ -617,10 +617,10 @@ void ECF_RC::VTM_DataProcess()
                         break;
                 }
             }
-        } else if (i != (REFEREE.DataLen - 1) && REFEREE.RefereeData[i] == 0xA9 &&
-                   REFEREE.RefereeData[i + 1] == 0x53) {
-            if (Verify_CRC16_Check_Sum(&REFEREE.RefereeData[i], 21) == 1) {
-                memcpy(&this->VTM, &REFEREE.RefereeData[i], 21);
+        } else if (i != (REFFEREE.DataLen - 1) && REFFEREE.RefereeData[i] == 0xA9 &&
+                   REFFEREE.RefereeData[i + 1] == 0x53) {
+            if (Verify_CRC16_Check_Sum(&REFFEREE.RefereeData[i], 21) == 1) {
+                memcpy(&this->VTM, &REFFEREE.RefereeData[i], 21);
                 VTM.ch[0] = ((int16_t) VTM.ch_0) - RC_CH_VALUE_OFFSET;
                 VTM.ch[1] = ((int16_t) VTM.ch_1) - RC_CH_VALUE_OFFSET;
                 VTM.ch[2] = ((int16_t) VTM.ch_2) - RC_CH_VALUE_OFFSET;

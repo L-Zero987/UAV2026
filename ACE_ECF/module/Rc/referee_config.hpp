@@ -437,11 +437,11 @@ typedef __packed struct
 	uint8_t RECEIVE_FLAG;
     
     Game_Type_Data Game_Status;
-    Game_Result Game_Result;
+    Game_Result Game_result;
     Robot_Hp_Data Robot_HP;
     Area_Data Event_Data;
     Supply_Data Supply_Action;
-    Referee_Warning Referee_Warning;
+    Referee_Warning Referee_warning;
     Dart_Launch_Data Dart_Remaining_Time;
     Robot_Situation_Data Robot_Status;
     Robot_Power_Heat_Data Power_Heat;

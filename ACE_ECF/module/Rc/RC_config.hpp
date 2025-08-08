@@ -16,10 +16,10 @@
 
 #endif
 // Dr16的数据来源：Dt7串口接收机，图传通道(TC)，接收转发
-#define RECIVE_DT7_CONTROL
+// #define RECIVE_DT7_CONTROL
 // #define RECIVE_VTM_CONTROL
-#define RECIVE_REFEREE
-#define SEND_CONTROL_FORWARD
+#define RECIVE_REFFEREE
+// #define SEND_CONTROL_FORWARD
 // #define RECIVE_CONTROL_FORWARD
 
 #define FORWARD_CANID 0X01
@@ -35,11 +35,11 @@
 #endif
 #endif
 
-#ifdef RECIVE_REFEREE
+#ifdef RECIVE_REFFEREE
 #ifdef STM32H723xx
-#define REFEREE_USART huart2
+#define REFFEREE_USART huart2
 #elif STM32F405xx
-#define REFEREE_USART huart1
+#define REFFEREE_USART huart6
 #endif
 #endif
 

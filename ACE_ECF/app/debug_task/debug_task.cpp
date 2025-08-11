@@ -1,5 +1,10 @@
 #include "debug_task.hpp"
 
+float speed1;
+float speed2;
+float speed3;
+float set_speed = -1000;
+
 namespace Debug_n
 {
     Debug_c::Debug_c(void)
@@ -12,8 +17,13 @@ namespace Debug_n
 
     void Debug_c::Loop1(void)
     {
-        fire->friction_motor[0]->DJIMotorSetRef(1000);
-        fire->friction_motor[1]->DJIMotorSetRef(1000);
-        fire->friction_motor[2]->DJIMotorSetRef(1000);
+        fire->friction_motor[0]->DJIMotorEnable();
+        fire->friction_motor[1]->DJIMotorEnable();
+        fire->friction_motor[2]->DJIMotorEnable();
+        fire->friction_motor[0]->DJIMotorSetRef(set_speed);
+        fire->friction_motor[1]->DJIMotorSetRef(set_speed);
+        fire->friction_motor[2]->DJIMotorSetRef(set_speed);
+
+        speed1 = fire->friction_motor[0]->MotorMeasure.measure.feedback_speed
     }
 }

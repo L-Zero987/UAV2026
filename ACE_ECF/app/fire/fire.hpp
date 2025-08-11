@@ -25,7 +25,7 @@ namespace Fire_n
 
         static Fire_c *Get_InstancePtr();
 
-        void StateLoop(void);
+        void StateLoop(void);               // 状态主循环，1ms执行一次
         void Change_State(Firc_State_e new_state);
         float shoot_speed = 10;             // 弹速，单位m/s
         float shoot_freq  = 50;             // 弹频，单位Hz
@@ -34,16 +34,20 @@ namespace Fire_n
         Firc_State_e current_state = Disable;
         Firc_State_e last_state    = Disable;
         bool is_loop = false;
-        bool is_stuck = false;
 
         Fire_c();
 
         void Friction_Init(void);
         void Reloader_Init(void);
-        void Shoot(uint8_t num, float freq);
-        void Shoot(float freq);
-        void Set_FrictionStop(void);
-        void Set_FrictionSpeed(void);
+        void Friction_Enable(void);
+        void Frictuin_Disable(void);
+        void Friction_Stop(void);
+        void Friction_SetSpeed(void);
+        void Reloader_Enable(void);
+        void Reloader_Disable(void);
+        void Reloader_Stop(void);
+
+        void DoShoot(uint8_t num, float freq);
 
         void StateStart(void);
         void StateExit(void);

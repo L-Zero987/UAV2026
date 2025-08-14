@@ -46,8 +46,6 @@ namespace Config_n
 #define RELOADER_MOTOR_PID_S_KD    2.0f
 #define RELOADER_MOTOR_ID          0x04u
 
-#define RELOADER_ENCODER_TO_SHOOT1 36782  // 打一发编码器转动值// 8192*36/8 //-294257 //转 一圈
-
 
 /*============================== 软件层配置 ==============================*/
 

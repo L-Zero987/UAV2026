@@ -23,7 +23,5 @@ namespace Debug_n
         fire->friction_motor[0]->DJIMotorSetRef(set_speed);
         fire->friction_motor[1]->DJIMotorSetRef(set_speed);
         fire->friction_motor[2]->DJIMotorSetRef(set_speed);
-
-        speed1 = fire->friction_motor[0]->MotorMeasure.measure.feedback_speed
     }
 }

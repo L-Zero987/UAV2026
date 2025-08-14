@@ -27,7 +27,7 @@ endif()
 set(CMAKE_PROJECT_NAME Project)
 
 # Include toolchain file
-include("cmake/gcc-arm-none-eabi.cmake")
+include("cmake/gcc-arm-none-eabi.cmake")        # 添加gcc
 
 # Enable compile command to ease indexing with e.g. clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
@@ -46,6 +46,7 @@ add_executable(${CMAKE_PROJECT_NAME})
 add_subdirectory(cmake/stm32cubemx)
 
 ###############################以下为修改过的cmakelist#########################################
+
 function(USER_ADD_DIR dir)
     file(GLOB USER_SOURCE
             ${dir}/*.h

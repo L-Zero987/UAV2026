@@ -22,32 +22,44 @@ namespace Fire_n
     public:
         DJI_Motor_n::DJI_Motor_Instance* friction_motor[FRICTION_MOTOR_NUMS] = {nullptr};
         DJI_Motor_n::DJI_Motor_Instance* reloader_motor = nullptr;
+        float shoot_speed = 4500.0f;                // 摩擦轮转速，单位 转/min
+        float shoot_freq  = 4.0f;                   // 弹频，单位Hz
 
         static Fire_c *Get_InstancePtr();
 
-        void StateLoop(void);               // 状态主循环，1ms执行一次
+        void StateLoop(void);                       // 状态主循环，1ms执行一次
         void Change_State(Firc_State_e new_state);
-        float shoot_speed = 10;             // 弹速，单位m/s
-        float shoot_freq  = 50;             // 弹频，单位Hz
 
     private:
         Firc_State_e current_state = Disable;
-        Firc_State_e last_state    = Disable;
-        bool is_loop = false;
 
+        /* flag */
+        bool is_loop               = false;
+        bool is_wheel_middle       = true;
+
+        /* timer */
+        float timer_delta_t                  = 0.0f;
+        uint32_t timer_cnt                   = 0;
+        BSP_DWT_n::BSP_DWT_c *timer_instance = nullptr;
+
+        /* class */
         Fire_c();
 
+        /* function */
         void Friction_Init(void);
         void Reloader_Init(void);
         void Friction_Enable(void);
-        void Frictuin_Disable(void);
+        void Friction_Disable(void);
         void Friction_Stop(void);
-        void Friction_SetSpeed(void);
+        void Friction_UpdateSpeed(void);
         void Reloader_Enable(void);
         void Reloader_Disable(void);
         void Reloader_Stop(void);
-
+        void Reloader_Clear(void);
+        void Reloader_StuckBack(void);
+        bool CheckStuck(void);
         void DoShoot(uint8_t num, float freq);
+        void DoShoot(void);
 
         void StateStart(void);
         void StateExit(void);

@@ -51,6 +51,8 @@
 /* USER CODE END Variables */
 osThreadId defaultTaskHandle;
 osThreadId MainLoopHandle;
+osThreadId MotorLoopHandle;
+osThreadId StateLoopHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -59,6 +61,8 @@ osThreadId MainLoopHandle;
 
 void StartDefaultTask(void const * argument);
 extern void MainLoop_Task(void const * argument);
+extern void MotorLoop_Task(void const * argument);
+extern void StateLoop_Task(void const * argument);
 
 extern void MX_USB_DEVICE_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -113,8 +117,16 @@ void MX_FREERTOS_Init(void) {
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* definition and creation of MainLoop */
-  osThreadDef(MainLoop, MainLoop_Task, osPriorityNormal, 0, 128);
+  osThreadDef(MainLoop, MainLoop_Task, osPriorityHigh, 0, 128);
   MainLoopHandle = osThreadCreate(osThread(MainLoop), NULL);
+
+  /* definition and creation of MotorLoop */
+  osThreadDef(MotorLoop, MotorLoop_Task, osPriorityNormal, 0, 128);
+  MotorLoopHandle = osThreadCreate(osThread(MotorLoop), NULL);
+
+  /* definition and creation of StateLoop */
+  osThreadDef(StateLoop, StateLoop_Task, osPriorityLow, 0, 128);
+  StateLoopHandle = osThreadCreate(osThread(StateLoop), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */

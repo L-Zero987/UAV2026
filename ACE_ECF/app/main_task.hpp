@@ -8,6 +8,8 @@ extern "C"
 
  void MainTask_Init(void);
  void MainLoop_Task(void const * argument);
+ void MotorLoop_Task(void const * argument);
+ void StateLoop_Task(void const * argument);
 
 #ifdef __cplusplus
 }

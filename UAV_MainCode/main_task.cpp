@@ -1,6 +1,8 @@
 #include "main_task.hpp"
 #include "debug_task.hpp"
 #include "fire.hpp"
+#include "gimbal.hpp"
+#include "robot_cmd.hpp"
 #include "Config.hpp"
 
 extern "C"
@@ -29,8 +31,9 @@ extern "C"
  */
 void MainTask_Init()
 {
+    HAL_Delay(2048);
 #if (IS_DEBUG_MODE == 0)
-    fire_instance = new Fire_n::Fire_c();
+    fire_instance = Fire_n::Fire_c::Get_InstancePtr();
 
 #else
     debug_instance = new Debug_n::Debug_c();
@@ -47,7 +50,7 @@ void MainLoop_Task(void const * argument)
     while (1)
     {
 #if (IS_DEBUG_MODE == 0)
-
+        RobotCMD_n::StateLoop();
 #else
         debug_instance->Loop1();
 #endif
@@ -65,8 +68,10 @@ void MotorLoop_Task(void const * argument)
     {
 #if (IS_DEBUG_MODE == 0)
         DJI_Motor_n::DJIMotorControl();
+        DM_Motor_n::DM_motor_control();
 #else
         DJI_Motor_n::DJIMotorControl();
+        DM_Motor_n::DM_motor_control();
 #endif
         vTaskDelay(2);
     }
@@ -81,7 +86,8 @@ void StateLoop_Task(void const * argument)
     while(1)
     {
 #if (IS_DEBUG_MODE == 0)
-        fire_instance->StateLoop();
+        Gimbal_n::StateLoop();
+        Fire_n::StateLoop();
 #else
 
 #endif

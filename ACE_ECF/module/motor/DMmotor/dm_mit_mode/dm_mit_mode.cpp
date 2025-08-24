@@ -142,6 +142,8 @@ namespace DM_Motor_n
     }
     void DM_Mit_Mode_c::output_transmit()
     {
+        if (mode != POSITION)
+            mode = POSITION;
         TxDataProcessing(param_->output.p_des, param_->output.v_des, param_->output.Kp, param_->output.Kd, param_->output.t_des);
         TxDataToBuffer(tx_buff, txbuffer_);
         ECF_Transmit(TXTIME);

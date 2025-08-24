@@ -16,9 +16,9 @@
 
 #endif
 // Dr16的数据来源：Dt7串口接收机，图传通道(TC)，接收转发
-// #define RECIVE_DT7_CONTROL
-// #define RECIVE_VTM_CONTROL
-#define RECIVE_REFFEREE
+ #define RECIVE_DT7_CONTROL
+ #define RECIVE_VTM_CONTROL
+ #define RECIVE_REFFEREE
 // #define SEND_CONTROL_FORWARD
 // #define RECIVE_CONTROL_FORWARD
 

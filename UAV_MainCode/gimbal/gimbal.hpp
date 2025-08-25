@@ -62,15 +62,21 @@ namespace Gimbal_n
         void Yaw_Init(void);
         void Pitch_Init(void);
         void IMU_Init(void);
+
         void Change_PIDWithIMU(void);
         void Change_PIDWithEncoder(void);
+
         void Yaw_AngleLimit(void);
         void Yaw_SetOutput_Encoder(void);
         void Yaw_SetOutput_IMU(void);
         void Pitch_AngleLimit(void);
         void Pitch_SetOutput_Encoder(void);
         void Pitch_SetOutput_IMU(void);
+
         void Update_ActualAngle(void);
+
+        void CtrlMove(void);
+        void CtrlMove_Atuo(void);
 
         void StateStart(void);
         void StateExit(void);

@@ -11,7 +11,7 @@
 
 namespace Fire_n
 {
-/* region 宏以及变量声明 */
+    /* region 宏以及变量声明 */
 #define DISABLE_TIME               0.5f   // 失能处理时间
 #define ONE_SHOT_TIME              0.3f   // 单发时间
 #define STUCK_TIME                 0.22f  // 卡弹回退时间
@@ -21,7 +21,7 @@ namespace Fire_n
 Fire_c* this_ptr = nullptr;
 // endregion
 
-/* region 实例创建 */
+    /* region 实例创建 */
     Fire_c* Fire_c::Get_InstancePtr()
     {
         static Fire_c _instance;
@@ -40,7 +40,7 @@ Fire_c* this_ptr = nullptr;
     }
 // endregion
 
-/* region 初始化 */
+    /* region 初始化 */
     void Fire_c::Friction_Init()
     {
         Motor_General_Def_n::Motor_Init_Config_s _config_friction = {
@@ -130,7 +130,7 @@ Fire_c* this_ptr = nullptr;
     }
 // endregion
 
-/* region 功能函数 */
+    /* region 功能函数 */
     inline void Fire_c::Friction_Enable()
     {
         if(!this->friction_motor[0]->is_lost_dji && this->friction_motor[0]->MotorMeasure.measure.init_flag)
@@ -210,13 +210,9 @@ Fire_c* this_ptr = nullptr;
         this->reloader_motor->DJIMotorSetRef(-1000);
     }
 
-    bool Fire_c::Check_Stuck()
+    inline bool Fire_c::Check_Stuck()
     {
-        if(abs(this->reloader_motor->MotorMeasure.measure.feedback_real_current) > 7900)
-        {
-            return true;
-        }
-        return false;
+        return abs(this->reloader_motor->MotorMeasure.measure.feedback_real_current) > 7900;
     }
 
     void Fire_c::DoShoot(uint8_t num, float freq)
@@ -245,9 +241,10 @@ Fire_c* this_ptr = nullptr;
         this->reloader_motor->motor_settings.outer_loop_type = Motor_General_Def_n::SPEED_LOOP;
         this->reloader_motor->DJIMotorSetRef(this->shoot_freq * 60 * RELOADER_GEAR_RATIO / 8 );
     }
+
 // endregion
 
-/* region 状态机 */
+    /* region 状态机 */
     void Fire_c::ChangeState(Firc_State_e new_state)
     {
         this->is_loop = false;
@@ -316,9 +313,9 @@ Fire_c* this_ptr = nullptr;
     {
         if (this_ptr == nullptr)return;
         if (!this_ptr->is_loop)return;
+
         if (this_ptr->cmd_instance->connect_state == RobotCMD_n::DR16_CMD)
         {
-            // region DT7下的状态机
             switch (this_ptr->current_state)
             {
                 case Disable: // region Disable
@@ -345,8 +342,8 @@ Fire_c* this_ptr = nullptr;
                         this_ptr->ChangeState(Enable);
                         return;
                     }
-                    // endregion
                     break;
+                    // endregion
                 case Enable: // region Enable
                     /*
                      * 摩擦轮、拨弹盘使能
@@ -383,8 +380,8 @@ Fire_c* this_ptr = nullptr;
                             this_ptr->is_wheel_middle = true;
                         }
                     }
-                    // endregion
                     break;
+                    // endregion
                 case Ready: // region Ready
                     /*
                      * 摩擦轮给指定速度
@@ -437,8 +434,8 @@ Fire_c* this_ptr = nullptr;
                             return;
                         }
                     }
-                    // endregion
                     break;
+                    // endregion
                 case OneShoot: // region OneShoot
                     /*
                      * 摩擦轮给指定速度
@@ -477,8 +474,8 @@ Fire_c* this_ptr = nullptr;
                             return;
                         }
                     }
-                    // endregion
                     break;
+                    // endregion
                 case StartShoot: // region StartShoot
                     /*
                      * 摩擦轮给指定速度
@@ -509,8 +506,8 @@ Fire_c* this_ptr = nullptr;
                         this_ptr->ChangeState(Ready);
                         return;
                     }
-                    // endregion
                     break;
+                    // endregion
                 case Stuck: // region Stuck
                     /*
                      * 摩擦轮给指定速度
@@ -532,16 +529,14 @@ Fire_c* this_ptr = nullptr;
                         this_ptr->ChangeState(Ready);
                         return;
                     }
-                    // endregion
                     break;
+                    // endregion
                 default:
                     break;
             }
-            // endregion
-        }
+        }// DT7下的状态机
         else if(this_ptr->cmd_instance->Get_ConnectState() == RobotCMD_n::TC_CMD)
         {
-            // region TC下的状态机
             switch (this_ptr->current_state)
             {
                 case Disable: // region Disable
@@ -549,7 +544,6 @@ Fire_c* this_ptr = nullptr;
                     this_ptr->ChangeState(Enable);
                     return;
                     // endregion
-                    break;
                 case Enable: // region Enable
                     /*
                      * 摩擦轮、拨弹盘使能
@@ -564,8 +558,8 @@ Fire_c* this_ptr = nullptr;
                         this_ptr->ChangeState(Ready);
                         return;
                     }
-                    // endregion
                     break;
+                    // endregion
                 case Ready: // region Ready
                     /*
                      * 摩擦轮给指定速度
@@ -595,8 +589,8 @@ Fire_c* this_ptr = nullptr;
                         this_ptr->ChangeState(StartShoot);
                         return;
                     }
-                    // endregion
                     break;
+                    // endregion
                 case OneShoot: // region OneShoot
                     /*
                      * 摩擦轮给指定速度
@@ -629,8 +623,8 @@ Fire_c* this_ptr = nullptr;
                         this_ptr->ChangeState(Ready);
                         return;
                     }
-                    // endregion
                     break;
+                    // endregion
                 case StartShoot: // region StartShoot
                     /*
                      * 摩擦轮给指定速度
@@ -653,8 +647,8 @@ Fire_c* this_ptr = nullptr;
                         this_ptr->ChangeState(Ready);
                         return;
                     }
-                    // endregion
                     break;
+                    // endregion
                 case Stuck: // region Stuck
                     /*
                      * 摩擦轮给指定速度
@@ -676,12 +670,17 @@ Fire_c* this_ptr = nullptr;
                         this_ptr->ChangeState(Ready);
                         return;
                     }
-                    // endregion
                     break;
+                    // endregion
                 default:
                     break;
             }
-            // endregion
+        }// TC下的状态机
+        else
+        {
+            this_ptr->ChangeState(Disable);
+            this_ptr->Friction_Disable();
+            this_ptr->Reloader_Disable();
         }
     }
 

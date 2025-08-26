@@ -75,8 +75,9 @@ namespace Gimbal_n
 
         void Update_ActualAngle(void);
 
-        void CtrlMove(void);
-        void CtrlMove_Atuo(void);
+        void CtrlMove_DR16(void);
+        void CtrlMove_TC(void);
+        void CtrlMove_Auto(void);
 
         void StateStart(void);
         void StateExit(void);

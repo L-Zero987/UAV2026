@@ -42,7 +42,7 @@ namespace Fire_n
 
         /* flag */
         bool is_loop               = false;
-        bool is_wheel_middle       = true;
+        bool is_triggers_locked    = false; // 触发锁定标志位，用于防止某些状态循环切换(Enable、Ready)
 
         /* timer */
         float timer_delta_t                  = 0.0f;
@@ -61,7 +61,7 @@ namespace Fire_n
         void Friction_Disable(void);
         void Friction_Stop(void);
         void Friction_UpdateSpeed(void);
-        void Friction_AddSpeed(void);
+        void Friction_AddSpeed(float val);
 
         void Reloader_Init(void);
         void Reloader_Enable(void);
@@ -69,10 +69,13 @@ namespace Fire_n
         void Reloader_Stop(void);
         void Reloader_Clear(void);
         void Reloader_StuckBack(void);
-        void Reloader_AddFreq(void);
+        void Reloader_AddFreq(float val);
         void DoShoot(uint8_t num, float freq);
         void DoShoot(void);
         bool Check_Stuck(void);
+
+        void Change_ShootVal_DT16(void);
+        void Change_ShootVal_TC(void);
 
         void StateStart(void);
         void StateExit(void);

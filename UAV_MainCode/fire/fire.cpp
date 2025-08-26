@@ -242,6 +242,81 @@ Fire_c* this_ptr = nullptr;
         this->reloader_motor->DJIMotorSetRef(this->shoot_freq * 60 * RELOADER_GEAR_RATIO / 8 );
     }
 
+    inline void Fire_c::Friction_AddSpeed(float val)
+    {
+        this->shoot_speed += val;
+        if(this->shoot_speed > MAX_SHOOT_SPEED)
+        {
+            this->shoot_speed = MAX_SHOOT_SPEED;
+        }
+        else if(this->shoot_speed < MIN_SHOOT_SPEED)
+        {
+            this->shoot_speed = MIN_SHOOT_SPEED;
+        }
+    }
+
+    inline void Fire_c::Reloader_AddFreq(float val)
+    {
+        this->shoot_freq += val;
+        if(this->shoot_freq > MAX_SHOOT_FREQ)
+        {
+            this->shoot_freq = MAX_SHOOT_FREQ;
+        }
+        else if(this->shoot_freq < MIN_SHOOT_FREQ)
+        {
+            this->shoot_freq = MIN_SHOOT_FREQ;
+        }
+
+    }
+
+    void Fire_c::Change_ShootVal_DT16()
+    {
+        if(this->cmd_instance->Get_RC_LJoyLRValue() < -640)
+        {
+            if(this->cmd_instance->Get_RC_LJoyUDValue() > 640)
+            {
+                if(this->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_MIDDLE)
+                {
+                    this->Friction_AddSpeed(SPEED_SENSOR_RC);
+                }
+                else if(this->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_HIGH)
+                {
+                    this->Reloader_AddFreq(FREQ_SENSOR_RC);
+                }
+            }
+            else if(this->cmd_instance->Get_RC_LJoyUDValue() < -640)
+            {
+                if(this->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_MIDDLE)
+                {
+                    this->Friction_AddSpeed(-SPEED_SENSOR_RC);
+                }
+                else if(this->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_HIGH)
+                {
+                    this->Reloader_AddFreq(-FREQ_SENSOR_RC);
+                }
+            }
+        }
+    }
+
+    void Fire_c::Change_ShootVal_TC()
+    {
+        if(this->cmd_instance->Check_TC_KeyPress('C',this_ptr->cmd_instance->TC_cmd->kb.bit.C))
+        {
+            Friction_AddSpeed(this->cmd_instance->Get_TC_MouseZValue() * SPEED_SENSOR_TC * 0.001f);
+            Friction_AddSpeed(this->cmd_instance->Check_TC_KeyPress('W',this_ptr->cmd_instance->TC_cmd->kb.bit.W) * SPEED_SENSOR_TC);
+            Friction_AddSpeed(-this->cmd_instance->Check_TC_KeyPress('S',this_ptr->cmd_instance->TC_cmd->kb.bit.S) * SPEED_SENSOR_TC);
+            Friction_AddSpeed(+this->cmd_instance->Check_TC_KeyPress('D',this_ptr->cmd_instance->TC_cmd->kb.bit.D) * SPEED_SENSOR_TC * 0.01f);
+            Friction_AddSpeed(-this->cmd_instance->Check_TC_KeyPress('A',this_ptr->cmd_instance->TC_cmd->kb.bit.A) * SPEED_SENSOR_TC * 0.01f);
+        }
+        if(this->cmd_instance->Check_TC_KeyPress('G',this_ptr->cmd_instance->TC_cmd->kb.bit.G))
+        {
+            Reloader_AddFreq(this->cmd_instance->Get_TC_MouseZValue() * FREQ_SENSOR_TC * 0.001f);
+            Reloader_AddFreq(this->cmd_instance->Check_TC_KeyPress('W',this_ptr->cmd_instance->TC_cmd->kb.bit.W) * FREQ_SENSOR_TC);
+            Reloader_AddFreq(-this->cmd_instance->Check_TC_KeyPress('S',this_ptr->cmd_instance->TC_cmd->kb.bit.S) * FREQ_SENSOR_TC);
+            Reloader_AddFreq(+this->cmd_instance->Check_TC_KeyPress('D',this_ptr->cmd_instance->TC_cmd->kb.bit.D) * FREQ_SENSOR_TC * 0.01f);
+            Reloader_AddFreq(-this->cmd_instance->Check_TC_KeyPress('A',this_ptr->cmd_instance->TC_cmd->kb.bit.A) * FREQ_SENSOR_TC * 0.01f);
+        }
+    }
 // endregion
 
     /* region 状态机 */
@@ -265,12 +340,10 @@ Fire_c* this_ptr = nullptr;
                 this->Reloader_Stop();
                 break;
             case Enable:
-                this->is_wheel_middle = false;
                 this->Friction_Stop();
                 this->Reloader_Stop();
                 break;
             case Ready:
-                this->is_wheel_middle = false;
                 this->Reloader_Stop();
                 break;
             case OneShoot:
@@ -295,8 +368,10 @@ Fire_c* this_ptr = nullptr;
             case Disable:
                 break;
             case Enable:
+                this->is_triggers_locked = true;
                 break;
             case Ready:
+                this->is_triggers_locked = true;
                 break;
             case OneShoot:
                 break;
@@ -348,12 +423,13 @@ Fire_c* this_ptr = nullptr;
                     /*
                      * 摩擦轮、拨弹盘使能
                      * 检测 拨杆 下拨 是否进入Disable状态
-                     * 棘轮居中标志位为0 检测 棘轮 居中 居中标志位置1
-                     * 棘轮居中标志位为1 检测 棘轮 上拨一点 是否进入Ready状态
+                     * 棘轮锁定标志位1 检测 棘轮 居中 锁定标志位置0
+                     * 棘轮锁定标志位0 检测 棘轮 上拨一点 是否进入Ready状态
                      * 检测 棘轮 上拨到底 是:拨弹盘反转给速度（退弹） 否:拨弹盘速度给0
                      */
                     this_ptr->Friction_Enable();
                     this_ptr->Reloader_Enable();
+//                    this_ptr->Change_ShootVal_DT16();
                     this_ptr->Friction_Stop();
                     this_ptr->Reloader_Stop();
                     if(this_ptr->cmd_instance->Get_RC_SW2State() <= RobotCMD_n::CMD_LOW)
@@ -365,7 +441,7 @@ Fire_c* this_ptr = nullptr;
                     {
                         this_ptr->Reloader_Clear();
                     }
-                    if(this_ptr->is_wheel_middle)
+                    if(!this_ptr->is_triggers_locked)
                     {
                         if(this_ptr->cmd_instance->Get_RC_RatchetState() <= RobotCMD_n::CMD_MIDDLE_HIGH)
                         {
@@ -377,7 +453,7 @@ Fire_c* this_ptr = nullptr;
                     {
                         if(this_ptr->cmd_instance->Get_RC_RatchetState() <= RobotCMD_n::CMD_MIDDLE)
                         {
-                            this_ptr->is_wheel_middle = true;
+                            this_ptr->is_triggers_locked = false;
                         }
                     }
                     break;
@@ -392,9 +468,14 @@ Fire_c* this_ptr = nullptr;
                      * 检测 棘轮 上拨到底 是:拨弹盘反转给速度（退弹） 否:拨弹盘速度给0
                      * 检测 棘轮 下拨 拨杆 居中 是否进入OneShoot状态
                      * 检测 棘轮 下拨 拨杆 上拨 是否进入StartShoot状态
+                     * 检测 左摇杆左上角 拨杆居中 加弹速
+                     * 检测 左摇杆左上角 拨杆上拨 加弹频
+                     * 检测 左摇杆左下角 拨杆居中 减弹速
+                     * 检测 左摇杆左下角 拨杆上拨 减弹频
                      */
                     this_ptr->Friction_Enable();
                     this_ptr->Reloader_Enable();
+                    this_ptr->Change_ShootVal_DT16();
                     this_ptr->Friction_UpdateSpeed();
                     this_ptr->Reloader_Stop();
                     if(this_ptr->cmd_instance->Get_RC_SW2State() <= RobotCMD_n::CMD_LOW)
@@ -406,7 +487,7 @@ Fire_c* this_ptr = nullptr;
                     {
                         this_ptr->Reloader_Clear();
                     }
-                    if(this_ptr->is_wheel_middle)
+                    if(!this_ptr->is_triggers_locked)
                     {
                         if(this_ptr->cmd_instance->Get_RC_RatchetState() <= RobotCMD_n::CMD_MIDDLE_HIGH)
                         {
@@ -418,7 +499,7 @@ Fire_c* this_ptr = nullptr;
                     {
                         if(this_ptr->cmd_instance->Get_RC_RatchetState() <= RobotCMD_n::CMD_MIDDLE)
                         {
-                            this_ptr->is_wheel_middle = true;
+                            this_ptr->is_triggers_locked = false;
                         }
                     }
                     if(this_ptr->cmd_instance->Get_RC_RatchetState() == RobotCMD_n::CMD_LOW)
@@ -541,22 +622,31 @@ Fire_c* this_ptr = nullptr;
             {
                 case Disable: // region Disable
                     // 检测到图传链接，直接进入Enable状态
+                    this_ptr->is_triggers_locked = false;
                     this_ptr->ChangeState(Enable);
                     return;
                     // endregion
                 case Enable: // region Enable
                     /*
                      * 摩擦轮、拨弹盘使能
-                     * 检测 R键 由按下变为抬起 进入Ready状态
+                     * R键锁定标志位1 检测 R键 抬起 R键锁定标志位置0
+                     * R键锁定标志位0 检测 R键 抬起 进入Ready状态
                      */
                     this_ptr->Friction_Enable();
                     this_ptr->Reloader_Enable();
                     this_ptr->Friction_Stop();
                     this_ptr->Reloader_Stop();
-                    if(this_ptr->cmd_instance->Check_TC_KeyUp('R',this_ptr->cmd_instance->TC_cmd->kb.bit.R))
+                    if(!this_ptr->is_triggers_locked)
                     {
-                        this_ptr->ChangeState(Ready);
-                        return;
+                        if(this_ptr->cmd_instance->Check_TC_KeyUp('R',this_ptr->cmd_instance->TC_cmd->kb.bit.R))
+                        {
+                            this_ptr->ChangeState(Ready);
+                            return;
+                        }
+                    }
+                    else if(this_ptr->cmd_instance->Check_TC_KeyUp('R',this_ptr->cmd_instance->TC_cmd->kb.bit.R))
+                    {
+                        this_ptr->is_triggers_locked = false;
                     }
                     break;
                     // endregion
@@ -570,6 +660,7 @@ Fire_c* this_ptr = nullptr;
                      */
                     this_ptr->Friction_Enable();
                     this_ptr->Reloader_Enable();
+                    this_ptr->Change_ShootVal_TC();
                     this_ptr->Friction_UpdateSpeed();
                     this_ptr->Reloader_Stop();
                     if(this_ptr->cmd_instance->Check_TC_KeyDown('R',this_ptr->cmd_instance->TC_cmd->kb.bit.R))
@@ -678,6 +769,7 @@ Fire_c* this_ptr = nullptr;
         }// TC下的状态机
         else
         {
+            this_ptr->is_triggers_locked = false;
             this_ptr->ChangeState(Disable);
             this_ptr->Friction_Disable();
             this_ptr->Reloader_Disable();

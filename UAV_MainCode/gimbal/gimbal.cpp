@@ -170,7 +170,7 @@ user_maths_c math_;
 // endregion
 
     /* region 功能函数 */
-    void Gimbal_c::Change_PIDWithEncoder()
+    inline void Gimbal_c::Change_PIDWithEncoder()
     {
         this->target_yaw = this->yaw_motor->MotorMeasure.measure.record_ecd;
         this->target_pitch = this->pitch_motor->get_data_.postion;
@@ -178,7 +178,7 @@ user_maths_c math_;
         this->Pitch_SetOutput_Encoder();
     }
 
-    void Gimbal_c::Change_PIDWithIMU()
+    inline void Gimbal_c::Change_PIDWithIMU()
     {
         this->target_yaw = this->actual_yaw;
         this->target_pitch = this->actual_pitch;
@@ -259,6 +259,24 @@ user_maths_c math_;
             this->yaw_motor->Set_ANGLE_PID_other_feedback(&this->actual_yaw);
         }
         this->yaw_motor->DJIMotorSetRef(this->target_yaw);
+    }
+
+    inline void Gimbal_c::CtrlMove_DR16()
+    {
+        this->target_yaw   += this->cmd_instance->Get_RC_RJoyLRValue() * YAW_SENSOR_RC;
+        this->target_pitch += this->cmd_instance->Get_RC_RJoyUDValue() * PITCH_SENSOR_RC;
+        // (O,o)! 看25的代码疑似编码器模式与陀螺仪模式pitch上下翻转，调试需要注意
+    }
+
+    inline void Gimbal_c::CtrlMove_TC()
+    {
+        this->target_yaw   -= this->cmd_instance->Get_TC_MouseXValue() * YAW_SENSOR_TC;
+        this->target_pitch += this->cmd_instance->Get_TC_MouseYValue() * PITCH_SENSOR_TC;
+    }
+
+    void Gimbal_c::CtrlMove_Auto()
+    {
+        // todo 相机的通讯
     }
 // endregion
 
@@ -383,9 +401,9 @@ user_maths_c math_;
                      * 填充发送数据
                      * 检测 拨杆下拨 切换 Disable 状态
                      * 检测 拨杆上拨 切换 Auto 状态
-                     * 检测 左拨杆左上角 计时器计时
-                     * 检测 左拨杆左上角 计时器到指定时间 切换 CWI 状态
-                     * 检测 左拨杆不在左上角 计时器清零
+                     * 检测 左拨杆右上角 计时器计时
+                     * 检测 左拨杆右上角 计时器到指定时间 切换 CWI 状态
+                     * 检测 左拨杆不在右上角 计时器清零
                      */
                     this_ptr->yaw_motor->DJIMotorEnable();
                     if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_LOW)
@@ -398,7 +416,7 @@ user_maths_c math_;
                         this_ptr->ChangeState(AutoControl);
                         return;
                     }
-                    if(this_ptr->cmd_instance->Get_RC_LJoyLRValue() < -640 && this_ptr->cmd_instance->Get_RC_LJoyUDValue() > 640)
+                    if(this_ptr->cmd_instance->Get_RC_LJoyLRValue() < 640 && this_ptr->cmd_instance->Get_RC_LJoyUDValue() > 640)
                     {
                         if(this_ptr->timer_delta_t < CHANGE_STATE_TIME)
                         {
@@ -413,7 +431,7 @@ user_maths_c math_;
                     {
                         this_ptr->timer_delta_t = 0;
                     }
-                    /* CtrlMove */
+                    this_ptr->CtrlMove_DR16();
                     this_ptr->Yaw_AngleLimit();
                     this_ptr->Pitch_AngleLimit();
                     this_ptr->Yaw_SetOutput_Encoder();
@@ -462,7 +480,7 @@ user_maths_c math_;
                     {
                         this_ptr->timer_delta_t = 0;
                     }
-                    /* CtrlMove */
+                    this_ptr->CtrlMove_DR16();
                     this_ptr->Yaw_AngleLimit();
                     this_ptr->Pitch_AngleLimit();
                     this_ptr->Yaw_SetOutput_IMU();
@@ -493,7 +511,7 @@ user_maths_c math_;
                         this_ptr->ChangeState(ControlWithIMU);
                         return;
                     }
-                    /* CtrlMove_Auto */
+                    this_ptr->CtrlMove_Auto();
                     this_ptr->Yaw_AngleLimit();
                     this_ptr->Pitch_AngleLimit();
                     this_ptr->Yaw_SetOutput_IMU();
@@ -575,7 +593,7 @@ user_maths_c math_;
                         this_ptr->ChangeState(AutoControl);
                         return;
                     }
-                    /* CtrlMove */
+                    this_ptr->CtrlMove_TC();
                     this_ptr->Yaw_AngleLimit();
                     this_ptr->Pitch_AngleLimit();
                     this_ptr->Yaw_SetOutput_IMU();
@@ -600,7 +618,7 @@ user_maths_c math_;
                         this_ptr->ChangeState(ControlWithIMU);
                         return;
                     }
-                    /* CtrlMove_Auto */
+                    this_ptr->CtrlMove_Auto();
                     this_ptr->Yaw_AngleLimit();
                     this_ptr->Pitch_AngleLimit();
                     this_ptr->Yaw_SetOutput_IMU();

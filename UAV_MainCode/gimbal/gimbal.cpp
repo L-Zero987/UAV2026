@@ -347,6 +347,7 @@ user_maths_c math_;
         if(this_ptr == nullptr)return;
         if(!this_ptr->is_loop)return;
 
+        this_ptr->imu->BMI_UpData();
         this_ptr->Update_ActualAngle();
 
         if(this_ptr->cmd_instance->connect_state == RobotCMD_n::DR16_CMD)

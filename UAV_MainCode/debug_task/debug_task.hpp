@@ -24,8 +24,6 @@ namespace Debug_n
 
         void Loop1(void);
     private:
-        // DJI_Motor_n::DJI_Motor_Instance *test_motor;
-        Fire_n::Fire_c *fire;
     };
 
 }

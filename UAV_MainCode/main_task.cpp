@@ -52,7 +52,6 @@ void MainLoop_Task(void const * argument)
     {
 #if (IS_DEBUG_MODE == 0)
         RobotCMD_n::StateLoop();
-
 #else
         debug_instance->Loop1();
 #endif
@@ -72,8 +71,7 @@ void MotorLoop_Task(void const * argument)
         DJI_Motor_n::DJIMotorControl();
         gimbal_instance->pitch_motor->Transmit();
 #else
-        DJI_Motor_n::DJIMotorControl();
-        gimbal_instance->pitch_motor->Transmit();
+
 #endif
         vTaskDelay(2);
     }

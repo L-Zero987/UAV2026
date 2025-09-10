@@ -47,7 +47,7 @@ namespace Gimbal_n
         /* flag */
         bool is_loop = false;
 
-        /* command */
+        /* ctrl */
         RobotCMD_n::RobotCMD_c* cmd_instance;
 
         /* timer */

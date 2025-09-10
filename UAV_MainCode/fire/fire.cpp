@@ -215,6 +215,7 @@ Fire_c* this_ptr = nullptr;
         return abs(this->reloader_motor->MotorMeasure.measure.feedback_real_current) > 7900;
     }
 
+    // 指定弹数的发射
     void Fire_c::DoShoot(uint8_t num, float freq)
     {
         static float Last_Shoot_Time = 0;
@@ -235,6 +236,7 @@ Fire_c* this_ptr = nullptr;
         }
     }
 
+    // 连发
     inline void Fire_c::DoShoot()
     {
         this->reloader_motor->motor_settings.close_loop_type = Motor_General_Def_n::SPEED_LOOP;
@@ -269,8 +271,17 @@ Fire_c* this_ptr = nullptr;
 
     }
 
+    /**
+     * @brief DT16控制下改变射击参数
+     * */
     void Fire_c::Change_ShootVal_DT16()
     {
+        /*
+         * 左摇杆左上角且右拨杆居中：加弹速
+         * 左摇杆左下角且右拨杆居中：减弹速
+         * 左摇杆左上角且右拨杆上拨：加弹频
+         * 左摇杆左下角且右拨杆上拨：减弹频
+         */
         if(this->cmd_instance->Get_RC_LJoyLRValue() < -640)
         {
             if(this->cmd_instance->Get_RC_LJoyUDValue() > 640)
@@ -298,8 +309,19 @@ Fire_c* this_ptr = nullptr;
         }
     }
 
+    /**
+     * @brief 图传控制下改变射击参数
+     * */
     void Fire_c::Change_ShootVal_TC()
     {
+        /*
+         * C：弹速RPM逻辑
+         * V：自瞄pitch补偿逻辑(未实现)
+         * G：弹频逻辑
+         * 鼠标滚轮：逻辑加减
+         * WS：逻辑大幅加减
+         * AD：逻辑小幅定额加减
+         */
         if(this->cmd_instance->Check_TC_KeyPress('C',this_ptr->cmd_instance->TC_cmd->kb.bit.C))
         {
             Friction_AddSpeed(this->cmd_instance->Get_TC_MouseZValue() * SPEED_SENSOR_TC * 0.001f);
@@ -386,52 +408,93 @@ Fire_c* this_ptr = nullptr;
 
     void StateLoop()
     {
+        // 确定启动
         if (this_ptr == nullptr)return;
         if (!this_ptr->is_loop)return;
 
-        if (this_ptr->cmd_instance->connect_state == RobotCMD_n::DR16_CMD)
+        // 检查连接
+        RobotCMD_n::RobotCMD_ConnectState_e _connect_state = this_ptr->cmd_instance->connect_state;
+        if(_connect_state == RobotCMD_n::NOT_CONNECT)
         {
-            switch (this_ptr->current_state)
-            {
-                case Disable: // region Disable
-                    /*
-                     * 计时器未到指定时间，摩擦轮、拨弹盘(速控)使能
-                     * 计时器未到指定时间，计时器计时
-                     * 计时器到指定时间，摩擦轮、拨弹盘失能
-                     * 检测 拨杆 拨中/上拨 是否进入Enable状态
-                     */
-                    if(this_ptr->timer_delta_t < DISABLE_TIME)
-                    {
-                        this_ptr->Friction_Enable();
-                        this_ptr->Reloader_Enable();
-                        this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
-                    }
-                    else
-                    {
-                        this_ptr->Friction_Disable();
-                        this_ptr->Reloader_Disable();
-                    }
+            this_ptr->is_triggers_locked = false;
+            this_ptr->ChangeState(Disable);
+            this_ptr->Friction_Disable();
+            this_ptr->Reloader_Disable();
+            return;
+        }
 
-                    if(this_ptr->cmd_instance->Get_RC_SW2State() >= RobotCMD_n::CMD_MIDDLE)
-                    {
-                        this_ptr->ChangeState(Enable);
-                        return;
-                    }
-                    break;
-                    // endregion
-                case Enable: // region Enable
-                    /*
-                     * 摩擦轮、拨弹盘使能
-                     * 检测 拨杆 下拨 是否进入Disable状态
-                     * 棘轮锁定标志位1 检测 棘轮 居中 锁定标志位置0
-                     * 棘轮锁定标志位0 检测 棘轮 上拨一点 是否进入Ready状态
-                     * 检测 棘轮 上拨到底 是:拨弹盘反转给速度（退弹） 否:拨弹盘速度给0
-                     */
+        // 状态机
+        switch (this_ptr->current_state)
+        {
+            case Disable: // region Disable
+                /* * * * * * * * * * * * * * * * * * * ctrl with DR16
+                 * 计时器未到指定时间，摩擦轮、拨弹盘(速控)使能
+                 * 计时器未到指定时间，计时器计时
+                 * 计时器到指定时间，摩擦轮、拨弹盘失能
+                 * 检测 拨杆 拨中/上拨 是否进入Enable状态
+                 * * * * * * * * * * * * * * * * * * * ctrl with TC
+                 * 检测到图传链接，直接进入Enable状态
+                 */
+                if(_connect_state == RobotCMD_n::TC_CMD)
+                {
+                    this_ptr->is_triggers_locked = false;
+                    this_ptr->ChangeState(Enable);
+                    return;
+                }
+                if(this_ptr->timer_delta_t < DISABLE_TIME)
+                {
                     this_ptr->Friction_Enable();
                     this_ptr->Reloader_Enable();
-//                    this_ptr->Change_ShootVal_DT16();
-                    this_ptr->Friction_Stop();
-                    this_ptr->Reloader_Stop();
+                    this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
+                }
+                else
+                {
+                    this_ptr->Friction_Disable();
+                    this_ptr->Reloader_Disable();
+                }
+
+                if(this_ptr->cmd_instance->Get_RC_SW2State() >= RobotCMD_n::CMD_MIDDLE)
+                {
+                    this_ptr->ChangeState(Enable);
+                    return;
+                }
+                break;
+                // endregion
+            case Enable: // region Enable
+                /* * * * * * * * * * * * * * * * * * * * ctrl with DR16
+                 * 摩擦轮、拨弹盘使能
+                 * 检测 拨杆 下拨 是否进入Disable状态
+                 * 锁定标志位1 检测 棘轮 居中 锁定标志位置0
+                 * 锁定标志位0 检测 棘轮 上拨一点 是否进入Ready状态
+                 * 检测 棘轮 上拨到底 是:拨弹盘反转给速度（退弹） 否:拨弹盘速度给0
+                 * * * * * * * * * * * * * * * * * * * * ctrl with TC
+                 * 摩擦轮、拨弹盘使能
+                 * 锁定标志位1 检测 R键 抬起 锁定标志位置0
+                 * 锁定标志位0 检测 R键 抬起 进入Ready状态
+                 */
+                this_ptr->Friction_Enable();
+                this_ptr->Reloader_Enable();
+                this_ptr->Friction_Stop();
+                this_ptr->Reloader_Stop();
+                if(_connect_state == RobotCMD_n::TC_CMD)
+                {
+                    this_ptr->Change_ShootVal_TC();
+                    if(!this_ptr->is_triggers_locked)
+                    {
+                        if(this_ptr->cmd_instance->Check_TC_KeyUp('R',this_ptr->cmd_instance->TC_cmd->kb.bit.R))
+                        {
+                            this_ptr->ChangeState(Ready);
+                            return;
+                        }
+                    }
+                    else if(this_ptr->cmd_instance->Check_TC_KeyUp('R',this_ptr->cmd_instance->TC_cmd->kb.bit.R))
+                    {
+                        this_ptr->is_triggers_locked = false;
+                    }
+                }
+                else // _connect_state == RobotCMD_n::DR16_CMD
+                {
+                     this_ptr->Change_ShootVal_DT16();
                     if(this_ptr->cmd_instance->Get_RC_SW2State() <= RobotCMD_n::CMD_LOW)
                     {
                         this_ptr->ChangeState(Disable);
@@ -456,28 +519,58 @@ Fire_c* this_ptr = nullptr;
                             this_ptr->is_triggers_locked = false;
                         }
                     }
-                    break;
-                    // endregion
-                case Ready: // region Ready
-                    /*
-                     * 摩擦轮给指定速度
-                     * 摩擦轮、拨弹盘使能
-                     * 检测 拨杆 下拨 是否进入Disable状态
-                     * 棘轮居中标志位为0 检测 棘轮 居中 居中标志位置1
-                     * 棘轮居中标志位为1 检测 棘轮 上拨一点 是否进入Enable状态
-                     * 检测 棘轮 上拨到底 是:拨弹盘反转给速度（退弹） 否:拨弹盘速度给0
-                     * 检测 棘轮 下拨 拨杆 居中 是否进入OneShoot状态
-                     * 检测 棘轮 下拨 拨杆 上拨 是否进入StartShoot状态
-                     * 检测 左摇杆左上角 拨杆居中 加弹速
-                     * 检测 左摇杆左上角 拨杆上拨 加弹频
-                     * 检测 左摇杆左下角 拨杆居中 减弹速
-                     * 检测 左摇杆左下角 拨杆上拨 减弹频
-                     */
-                    this_ptr->Friction_Enable();
-                    this_ptr->Reloader_Enable();
+                }
+                break;
+                // endregion
+            case Ready: // region Ready
+                /* * * * * * * * * * * * * * * * * * * * ctrl with DR16
+                 * 摩擦轮给指定速度
+                 * 摩擦轮、拨弹盘使能
+                 * 检测 拨杆 下拨 是否进入Disable状态
+                 * 棘轮居中标志位为0 检测 棘轮 居中 居中标志位置1
+                 * 棘轮居中标志位为1 检测 棘轮 上拨一点 是否进入Enable状态
+                 * 检测 棘轮 上拨到底 是:拨弹盘反转给速度（退弹） 否:拨弹盘速度给0
+                 * 检测 棘轮 下拨 拨杆 居中 是否进入OneShoot状态
+                 * 检测 棘轮 下拨 拨杆 上拨 是否进入StartShoot状态
+                 * 检测 左摇杆左上角 拨杆居中 加弹速
+                 * 检测 左摇杆左上角 拨杆上拨 加弹频
+                 * 检测 左摇杆左下角 拨杆居中 减弹速
+                 * 检测 左摇杆左下角 拨杆上拨 减弹频
+                 * * * * * * * * * * * * * * * * * * * * ctrl with TC
+                 * 摩擦轮给指定速度
+                 * 摩擦轮、拨弹盘使能
+                 * 检测 R键 按下 进入Enable状态
+                 * 检测 左键 抬起 且弹频率<=1 进入OneShoot状态
+                 * 检测 左键 按住 且弹频率 >1 进入StartShoot状态
+                 */
+                this_ptr->Friction_Enable();
+                this_ptr->Reloader_Enable();
+                this_ptr->Friction_UpdateSpeed();
+                this_ptr->Reloader_Stop();
+                if(_connect_state == RobotCMD_n::TC_CMD)
+                {
+                    this_ptr->Change_ShootVal_TC();
+                    if(this_ptr->cmd_instance->Check_TC_KeyDown('R',this_ptr->cmd_instance->TC_cmd->kb.bit.R))
+                    {
+                        this_ptr->ChangeState(Enable);
+                        return;
+                    }
+                    if(this_ptr->cmd_instance->Check_TC_KeyUp('l',this_ptr->cmd_instance->TC_cmd->mouse.press_l) &&
+                       this_ptr->shoot_freq <= 1)
+                    {
+                        this_ptr->ChangeState(OneShoot);
+                        return;
+                    }
+                    if(this_ptr->cmd_instance->Check_TC_KeyPress('l',this_ptr->cmd_instance->TC_cmd->mouse.press_l) &&
+                       this_ptr->shoot_freq > 1)
+                    {
+                        this_ptr->ChangeState(StartShoot);
+                        return;
+                    }
+                }
+                else // _connect_state == RobotCMD_n::DR16_CMD
+                {
                     this_ptr->Change_ShootVal_DT16();
-                    this_ptr->Friction_UpdateSpeed();
-                    this_ptr->Reloader_Stop();
                     if(this_ptr->cmd_instance->Get_RC_SW2State() <= RobotCMD_n::CMD_LOW)
                     {
                         this_ptr->ChangeState(Disable);
@@ -515,265 +608,518 @@ Fire_c* this_ptr = nullptr;
                             return;
                         }
                     }
-                    break;
-                    // endregion
-                case OneShoot: // region OneShoot
-                    /*
-                     * 摩擦轮给指定速度
-                     * 摩擦轮、拨弹盘使能
-                     * 检测 调用卡弹检测函数 是否进入Stuck状态
-                     * 检测 拨杆 下拨 是否进入Disable状态
-                     * 计时器没到单发时长，计时器计时
-                     * 计时器没到单发时长，调用发射函数
-                     * 计时器到单发时长，检测 棘轮 居中以上 进入Ready状态
-                     */
-                    this_ptr->Friction_Enable();
-                    this_ptr->Reloader_Enable();
-                    this_ptr->Friction_UpdateSpeed();
-                    if(this_ptr->cmd_instance->Get_RC_SW2State() <= RobotCMD_n::CMD_LOW)
-                    {
-                        this_ptr->ChangeState(Disable);
-                        return;
-                    }
-
-                    if(this_ptr->Check_Stuck())
-                    {
-                        this_ptr->ChangeState(Stuck);
-                        return;
-                    }
-
-                    if(this_ptr->timer_delta_t < ONE_SHOT_TIME)
-                    {
-                        this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
-                        this_ptr->DoShoot(1,2);
-                    }
-                    else
-                    {
-                        if(this_ptr->cmd_instance->Get_RC_SW2State() >= RobotCMD_n::CMD_MIDDLE)
-                        {
-                            this_ptr->ChangeState(Ready);
-                            return;
-                        }
-                    }
-                    break;
-                    // endregion
-                case StartShoot: // region StartShoot
-                    /*
-                     * 摩擦轮给指定速度
-                     * 摩擦轮、拨弹盘使能
-                     * 调用发射函数
-                     * 检测 调用卡弹检测函数 是否进入Stuck状态
-                     * 检测 拨杆 下拨 是否进入Disable状态
-                     * 检测 棘轮 居中以上 进入Ready状态
-                     */
-                    this_ptr->Friction_Enable();
-                    this_ptr->Reloader_Enable();
-                    this_ptr->Friction_UpdateSpeed();
-                    this_ptr->DoShoot();
-                    if(this_ptr->cmd_instance->Get_RC_SW2State() <= RobotCMD_n::CMD_LOW)
-                    {
-                        this_ptr->ChangeState(Disable);
-                        return;
-                    }
-
-                    if(this_ptr->Check_Stuck())
-                    {
-                        this_ptr->ChangeState(Stuck);
-                        return;
-                    }
-
-                    if(this_ptr->cmd_instance->Get_RC_SW2State() >= RobotCMD_n::CMD_MIDDLE)
-                    {
-                        this_ptr->ChangeState(Ready);
-                        return;
-                    }
-                    break;
-                    // endregion
-                case Stuck: // region Stuck
-                    /*
-                     * 摩擦轮给指定速度
-                     * 摩擦轮、拨弹盘使能
-                     * 计时器没到回退时长，计时器计时
-                     * 计时器没到回退时长，拨弹盘反转
-                     * 计时器到回退时长，进入Ready状态
-                     */
-                    this_ptr->Friction_Enable();
-                    this_ptr->Reloader_Enable();
-                    this_ptr->Friction_UpdateSpeed();
-                    if(this_ptr->timer_delta_t < STUCK_TIME)
-                    {
-                        this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
-                        this_ptr->Reloader_StuckBack();
-                    }
-                    else
-                    {
-                        this_ptr->ChangeState(Ready);
-                        return;
-                    }
-                    break;
-                    // endregion
-                default:
-                    break;
-            }
-        }// DT7下的状态机
-        else if(this_ptr->cmd_instance->Get_ConnectState() == RobotCMD_n::TC_CMD)
-        {
-            switch (this_ptr->current_state)
-            {
-                case Disable: // region Disable
-                    // 检测到图传链接，直接进入Enable状态
-                    this_ptr->is_triggers_locked = false;
-                    this_ptr->ChangeState(Enable);
+                }
+                break;
+                // endregion
+            case OneShoot: // region OneShoot
+                /* * * * * * * * * * * * * * * * * * * * * ctrl with DR16
+                 * 摩擦轮给指定速度
+                 * 摩擦轮、拨弹盘使能
+                 * 检测 调用卡弹检测函数 是否进入Stuck状态
+                 * 检测 拨杆 下拨 是否进入Disable状态
+                 * 计时器没到单发时长，计时器计时
+                 * 计时器没到单发时长，调用发射函数
+                 * 计时器到单发时长，检测 棘轮 居中以上 进入Ready状态
+                 * * * * * * * * * * * * * * * * * * * * * ctrl with TC
+                 * 摩擦轮给指定速度
+                 * 摩擦轮、拨弹盘使能
+                 * 检测 调用卡弹检测函数 是否进入Stuck状态
+                 * 计时器没到单发时长，计时器计时
+                 * 计时器没到单发时长，调用发射函数
+                 * 计时器到单发时长，回到Ready状态
+                 */
+                this_ptr->Friction_Enable();
+                this_ptr->Reloader_Enable();
+                this_ptr->Friction_UpdateSpeed();
+                if(_connect_state == RobotCMD_n::DR16_CMD && this_ptr->cmd_instance->Get_RC_SW2State() <= RobotCMD_n::CMD_LOW)
+                {
+                    this_ptr->ChangeState(Disable);
                     return;
-                    // endregion
-                case Enable: // region Enable
-                    /*
-                     * 摩擦轮、拨弹盘使能
-                     * R键锁定标志位1 检测 R键 抬起 R键锁定标志位置0
-                     * R键锁定标志位0 检测 R键 抬起 进入Ready状态
-                     */
-                    this_ptr->Friction_Enable();
-                    this_ptr->Reloader_Enable();
-                    this_ptr->Friction_Stop();
-                    this_ptr->Reloader_Stop();
-                    if(!this_ptr->is_triggers_locked)
-                    {
-                        if(this_ptr->cmd_instance->Check_TC_KeyUp('R',this_ptr->cmd_instance->TC_cmd->kb.bit.R))
-                        {
-                            this_ptr->ChangeState(Ready);
-                            return;
-                        }
-                    }
-                    else if(this_ptr->cmd_instance->Check_TC_KeyUp('R',this_ptr->cmd_instance->TC_cmd->kb.bit.R))
-                    {
-                        this_ptr->is_triggers_locked = false;
-                    }
-                    break;
-                    // endregion
-                case Ready: // region Ready
-                    /*
-                     * 摩擦轮给指定速度
-                     * 摩擦轮、拨弹盘使能
-                     * 检测 R键 按下 进入Enable状态
-                     * 检测 左键 抬起 且弹频率<=1 进入OneShoot状态
-                     * 检测 左键 按住 且弹频率 >1 进入StartShoot状态
-                     */
-                    this_ptr->Friction_Enable();
-                    this_ptr->Reloader_Enable();
-                    this_ptr->Change_ShootVal_TC();
-                    this_ptr->Friction_UpdateSpeed();
-                    this_ptr->Reloader_Stop();
-                    if(this_ptr->cmd_instance->Check_TC_KeyDown('R',this_ptr->cmd_instance->TC_cmd->kb.bit.R))
-                    {
-                        this_ptr->ChangeState(Enable);
-                        return;
-                    }
-                    if(this_ptr->cmd_instance->Check_TC_KeyUp('l',this_ptr->cmd_instance->TC_cmd->mouse.press_l) &&
-                        this_ptr->shoot_freq <= 1)
-                    {
-                        this_ptr->ChangeState(OneShoot);
-                        return;
-                    }
-                    if(this_ptr->cmd_instance->Check_TC_KeyPress('l',this_ptr->cmd_instance->TC_cmd->mouse.press_l) &&
-                        this_ptr->shoot_freq > 1)
-                    {
-                        this_ptr->ChangeState(StartShoot);
-                        return;
-                    }
-                    break;
-                    // endregion
-                case OneShoot: // region OneShoot
-                    /*
-                     * 摩擦轮给指定速度
-                     * 摩擦轮、拨弹盘使能
-                     * 检测 调用卡弹检测函数 是否进入Stuck状态
-                     * 计时器没到单发时长，计时器计时
-                     * 计时器没到单发时长，调用发射函数
-                     * 计时器到单发时长，回到Ready状态
-                     */
-                    this_ptr->Friction_Enable();
-                    this_ptr->Reloader_Enable();
-                    this_ptr->Friction_UpdateSpeed();
-                    if(this_ptr->cmd_instance->Get_RC_SW2State() <= RobotCMD_n::CMD_LOW)
-                    {
-                        this_ptr->ChangeState(Disable);
-                        return;
-                    }
-                    if(this_ptr->Check_Stuck())
-                    {
-                        this_ptr->ChangeState(Stuck);
-                        return;
-                    }
-                    if(this_ptr->timer_delta_t < ONE_SHOT_TIME)
-                    {
-                        this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
-                        this_ptr->DoShoot(1,2);
-                    }
-                    else
+                }
+                if(this_ptr->Check_Stuck())
+                {
+                    this_ptr->ChangeState(Stuck); // (O,o)? 检测到卡弹会出现连射两弹的情况吗?
+                    return;
+                }
+                if(this_ptr->timer_delta_t < ONE_SHOT_TIME)
+                {
+                    this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
+                    this_ptr->DoShoot(1,2);
+                }
+                else
+                {
+                    if(_connect_state == RobotCMD_n::TC_CMD)
                     {
                         this_ptr->ChangeState(Ready);
                         return;
                     }
-                    break;
-                    // endregion
-                case StartShoot: // region StartShoot
-                    /*
-                     * 摩擦轮给指定速度
-                     * 摩擦轮、拨弹盘使能
-                     * 调用发射函数
-                     * 检测 调用卡弹检测函数 是否进入Stuck状态
-                     * 检测 左键 抬起 回到Ready状态
-                     */
-                    this_ptr->Friction_Enable();
-                    this_ptr->Reloader_Enable();
-                    this_ptr->Friction_UpdateSpeed();
-                    this_ptr->DoShoot();
-                    if(this_ptr->Check_Stuck())
+                    else if(this_ptr->cmd_instance->Get_RC_SW2State() >= RobotCMD_n::CMD_MIDDLE)
                     {
-                        this_ptr->ChangeState(Stuck);
+                        this_ptr->ChangeState(Ready);
                         return;
                     }
+                }
+                break;
+                // endregion
+            case StartShoot: // region StartShoot
+                /* * * * * * * * * * * * * * * * * * * * * * ctrl with DR16
+                 * 摩擦轮给指定速度
+                 * 摩擦轮、拨弹盘使能
+                 * 调用发射函数
+                 * 检测 调用卡弹检测函数 是否进入Stuck状态
+                 * 检测 拨杆 下拨 是否进入Disable状态
+                 * 检测 棘轮 居中以上 进入Ready状态
+                 * * * * * * * * * * * * * * * * * * * * * * ctrl with TC
+                 * 摩擦轮给指定速度
+                 * 摩擦轮、拨弹盘使能
+                 * 调用发射函数
+                 * 检测 调用卡弹检测函数 是否进入Stuck状态
+                 * 检测 左键 抬起 回到Ready状态
+                 */
+                this_ptr->Friction_Enable();
+                this_ptr->Reloader_Enable();
+                this_ptr->Friction_UpdateSpeed();
+                this_ptr->DoShoot();
+                if(_connect_state == RobotCMD_n::DR16_CMD && this_ptr->cmd_instance->Get_RC_SW2State() <= RobotCMD_n::CMD_LOW)
+                {
+                    this_ptr->ChangeState(Disable);
+                    return;
+                }
+                if(this_ptr->Check_Stuck())
+                {
+                    this_ptr->ChangeState(Stuck);
+                    return;
+                }
+                if(_connect_state == RobotCMD_n::TC_CMD)
+                {
                     if(this_ptr->cmd_instance->Check_TC_KeyUp('l',this_ptr->cmd_instance->TC_cmd->mouse.press_l))
                     {
                         this_ptr->ChangeState(Ready);
                         return;
                     }
-                    break;
-                    // endregion
-                case Stuck: // region Stuck
-                    /*
-                     * 摩擦轮给指定速度
-                     * 摩擦轮、拨弹盘使能
-                     * 计时器没到回退时长，计时器计时
-                     * 计时器没到回退时长，拨弹盘反转
-                     * 计时器到回退时长，进入Ready状态 (O,o)! 理论上会出现单发卡弹直接不发的情况，可能需要last_state解决
-                     */
-                    this_ptr->Friction_Enable();
-                    this_ptr->Reloader_Enable();
-                    this_ptr->Friction_UpdateSpeed();
-                    if(this_ptr->timer_delta_t < STUCK_TIME)
-                    {
-                        this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
-                        this_ptr->Reloader_StuckBack();
-                    }
-                    else
-                    {
-                        this_ptr->ChangeState(Ready);
-                        return;
-                    }
-                    break;
-                    // endregion
-                default:
-                    break;
-            }
-        }// TC下的状态机
-        else
-        {
-            this_ptr->is_triggers_locked = false;
-            this_ptr->ChangeState(Disable);
-            this_ptr->Friction_Disable();
-            this_ptr->Reloader_Disable();
+                }
+                else if(this_ptr->cmd_instance->Get_RC_SW2State() >= RobotCMD_n::CMD_MIDDLE)
+                {
+                    this_ptr->ChangeState(Ready);
+                    return;
+                }
+                break;
+                // endregion
+            case Stuck: // region Stuck
+                /*
+                 * 摩擦轮给指定速度
+                 * 摩擦轮、拨弹盘使能
+                 * 计时器没到回退时长，计时器计时
+                 * 计时器没到回退时长，拨弹盘反转
+                 * 计时器到回退时长，进入Ready状态
+                 */
+                this_ptr->Friction_Enable();
+                this_ptr->Reloader_Enable();
+                this_ptr->Friction_UpdateSpeed();
+                if(this_ptr->timer_delta_t < STUCK_TIME)
+                {
+                    this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
+                    this_ptr->Reloader_StuckBack();
+                }
+                else
+                {
+                    this_ptr->ChangeState(Ready);
+                    return;
+                }
+                break;
+                // endregion
+            default:
+                break;
         }
+
+        // region 旧逻辑
+//        if (this_ptr->cmd_instance->connect_state == RobotCMD_n::DR16_CMD)// DT7下的状态机
+//        {
+//            switch (this_ptr->current_state)
+//            {
+//                case Disable: // region Disable
+//                    /*
+//                     * 计时器未到指定时间，摩擦轮、拨弹盘(速控)使能
+//                     * 计时器未到指定时间，计时器计时
+//                     * 计时器到指定时间，摩擦轮、拨弹盘失能
+//                     * 检测 拨杆 拨中/上拨 是否进入Enable状态
+//                     */
+//                    if(this_ptr->timer_delta_t < DISABLE_TIME)
+//                    {
+//                        this_ptr->Friction_Enable();
+//                        this_ptr->Reloader_Enable();
+//                        this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
+//                    }
+//                    else
+//                    {
+//                        this_ptr->Friction_Disable();
+//                        this_ptr->Reloader_Disable();
+//                    }
+//
+//                    if(this_ptr->cmd_instance->Get_RC_SW2State() >= RobotCMD_n::CMD_MIDDLE)
+//                    {
+//                        this_ptr->ChangeState(Enable);
+//                        return;
+//                    }
+//                    break;
+//                    // endregion
+//                case Enable: // region Enable
+//                    /*
+//                     * 摩擦轮、拨弹盘使能
+//                     * 检测 拨杆 下拨 是否进入Disable状态
+//                     * 棘轮锁定标志位1 检测 棘轮 居中 锁定标志位置0
+//                     * 棘轮锁定标志位0 检测 棘轮 上拨一点 是否进入Ready状态
+//                     * 检测 棘轮 上拨到底 是:拨弹盘反转给速度（退弹） 否:拨弹盘速度给0
+//                     */
+//                    this_ptr->Friction_Enable();
+//                    this_ptr->Reloader_Enable();
+////                    this_ptr->Change_ShootVal_DT16();
+//                    this_ptr->Friction_Stop();
+//                    this_ptr->Reloader_Stop();
+//                    if(this_ptr->cmd_instance->Get_RC_SW2State() <= RobotCMD_n::CMD_LOW)
+//                    {
+//                        this_ptr->ChangeState(Disable);
+//                        return;
+//                    }
+//                    if(this_ptr->cmd_instance->Get_RC_RatchetState() == RobotCMD_n::CMD_HIGH)
+//                    {
+//                        this_ptr->Reloader_Clear();
+//                    }
+//                    if(!this_ptr->is_triggers_locked)
+//                    {
+//                        if(this_ptr->cmd_instance->Get_RC_RatchetState() <= RobotCMD_n::CMD_MIDDLE_HIGH)
+//                        {
+//                            this_ptr->ChangeState(Ready);
+//                            return;
+//                        }
+//                    }
+//                    else
+//                    {
+//                        if(this_ptr->cmd_instance->Get_RC_RatchetState() <= RobotCMD_n::CMD_MIDDLE)
+//                        {
+//                            this_ptr->is_triggers_locked = false;
+//                        }
+//                    }
+//                    break;
+//                    // endregion
+//                case Ready: // region Ready
+//                    /*
+//                     * 摩擦轮给指定速度
+//                     * 摩擦轮、拨弹盘使能
+//                     * 检测 拨杆 下拨 是否进入Disable状态
+//                     * 棘轮居中标志位为0 检测 棘轮 居中 居中标志位置1
+//                     * 棘轮居中标志位为1 检测 棘轮 上拨一点 是否进入Enable状态
+//                     * 检测 棘轮 上拨到底 是:拨弹盘反转给速度（退弹） 否:拨弹盘速度给0
+//                     * 检测 棘轮 下拨 拨杆 居中 是否进入OneShoot状态
+//                     * 检测 棘轮 下拨 拨杆 上拨 是否进入StartShoot状态
+//                     * 检测 左摇杆左上角 拨杆居中 加弹速
+//                     * 检测 左摇杆左上角 拨杆上拨 加弹频
+//                     * 检测 左摇杆左下角 拨杆居中 减弹速
+//                     * 检测 左摇杆左下角 拨杆上拨 减弹频
+//                     */
+//                    this_ptr->Friction_Enable();
+//                    this_ptr->Reloader_Enable();
+//                    this_ptr->Change_ShootVal_DT16();
+//                    this_ptr->Friction_UpdateSpeed();
+//                    this_ptr->Reloader_Stop();
+//                    if(this_ptr->cmd_instance->Get_RC_SW2State() <= RobotCMD_n::CMD_LOW)
+//                    {
+//                        this_ptr->ChangeState(Disable);
+//                        return;
+//                    }
+//                    if(this_ptr->cmd_instance->Get_RC_RatchetState() == RobotCMD_n::CMD_HIGH)
+//                    {
+//                        this_ptr->Reloader_Clear();
+//                    }
+//                    if(!this_ptr->is_triggers_locked)
+//                    {
+//                        if(this_ptr->cmd_instance->Get_RC_RatchetState() <= RobotCMD_n::CMD_MIDDLE_HIGH)
+//                        {
+//                            this_ptr->ChangeState(Enable);
+//                            return;
+//                        }
+//                    }
+//                    else
+//                    {
+//                        if(this_ptr->cmd_instance->Get_RC_RatchetState() <= RobotCMD_n::CMD_MIDDLE)
+//                        {
+//                            this_ptr->is_triggers_locked = false;
+//                        }
+//                    }
+//                    if(this_ptr->cmd_instance->Get_RC_RatchetState() == RobotCMD_n::CMD_LOW)
+//                    {
+//                        if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_MIDDLE)
+//                        {
+//                            this_ptr->ChangeState(OneShoot);
+//                            return;
+//                        }
+//                        if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_HIGH)
+//                        {
+//                            this_ptr->ChangeState(StartShoot);
+//                            return;
+//                        }
+//                    }
+//                    break;
+//                    // endregion
+//                case OneShoot: // region OneShoot
+//                    /*
+//                     * 摩擦轮给指定速度
+//                     * 摩擦轮、拨弹盘使能
+//                     * 检测 调用卡弹检测函数 是否进入Stuck状态
+//                     * 检测 拨杆 下拨 是否进入Disable状态
+//                     * 计时器没到单发时长，计时器计时
+//                     * 计时器没到单发时长，调用发射函数
+//                     * 计时器到单发时长，检测 棘轮 居中以上 进入Ready状态
+//                     */
+//                    this_ptr->Friction_Enable();
+//                    this_ptr->Reloader_Enable();
+//                    this_ptr->Friction_UpdateSpeed();
+//                    if(this_ptr->cmd_instance->Get_RC_SW2State() <= RobotCMD_n::CMD_LOW)
+//                    {
+//                        this_ptr->ChangeState(Disable);
+//                        return;
+//                    }
+//
+//                    if(this_ptr->Check_Stuck())
+//                    {
+//                        this_ptr->ChangeState(Stuck);
+//                        return;
+//                    }
+//
+//                    if(this_ptr->timer_delta_t < ONE_SHOT_TIME)
+//                    {
+//                        this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
+//                        this_ptr->DoShoot(1,2);
+//                    }
+//                    else
+//                    {
+//                        if(this_ptr->cmd_instance->Get_RC_SW2State() >= RobotCMD_n::CMD_MIDDLE)
+//                        {
+//                            this_ptr->ChangeState(Ready);
+//                            return;
+//                        }
+//                    }
+//                    break;
+//                    // endregion
+//                case StartShoot: // region StartShoot
+//                    /*
+//                     * 摩擦轮给指定速度
+//                     * 摩擦轮、拨弹盘使能
+//                     * 调用发射函数
+//                     * 检测 调用卡弹检测函数 是否进入Stuck状态
+//                     * 检测 拨杆 下拨 是否进入Disable状态
+//                     * 检测 棘轮 居中以上 进入Ready状态
+//                     */
+//                    this_ptr->Friction_Enable();
+//                    this_ptr->Reloader_Enable();
+//                    this_ptr->Friction_UpdateSpeed();
+//                    this_ptr->DoShoot();
+//                    if(this_ptr->cmd_instance->Get_RC_SW2State() <= RobotCMD_n::CMD_LOW)
+//                    {
+//                        this_ptr->ChangeState(Disable);
+//                        return;
+//                    }
+//
+//                    if(this_ptr->Check_Stuck())
+//                    {
+//                        this_ptr->ChangeState(Stuck);
+//                        return;
+//                    }
+//
+//                    if(this_ptr->cmd_instance->Get_RC_SW2State() >= RobotCMD_n::CMD_MIDDLE)
+//                    {
+//                        this_ptr->ChangeState(Ready);
+//                        return;
+//                    }
+//                    break;
+//                    // endregion
+//                case Stuck: // region Stuck
+//                    /*
+//                     * 摩擦轮给指定速度
+//                     * 摩擦轮、拨弹盘使能
+//                     * 计时器没到回退时长，计时器计时
+//                     * 计时器没到回退时长，拨弹盘反转
+//                     * 计时器到回退时长，进入Ready状态
+//                     */
+//                    this_ptr->Friction_Enable();
+//                    this_ptr->Reloader_Enable();
+//                    this_ptr->Friction_UpdateSpeed();
+//                    if(this_ptr->timer_delta_t < STUCK_TIME)
+//                    {
+//                        this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
+//                        this_ptr->Reloader_StuckBack();
+//                    }
+//                    else
+//                    {
+//                        this_ptr->ChangeState(Ready);
+//                        return;
+//                    }
+//                    break;
+//                    // endregion
+//                default:
+//                    break;
+//            }
+//        }
+//        else if(this_ptr->cmd_instance->Get_ConnectState() == RobotCMD_n::TC_CMD)// TC下的状态机
+//        {
+//            switch (this_ptr->current_state)
+//            {
+//                case Disable: // region Disable
+//                    // 检测到图传链接，直接进入Enable状态
+//                    this_ptr->is_triggers_locked = false;
+//                    this_ptr->ChangeState(Enable);
+//                    return;
+//                    // endregion
+//                case Enable: // region Enable
+//                    /*
+//                     * 摩擦轮、拨弹盘使能
+//                     * R键锁定标志位1 检测 R键 抬起 R键锁定标志位置0
+//                     * R键锁定标志位0 检测 R键 抬起 进入Ready状态
+//                     */
+//                    this_ptr->Friction_Enable();
+//                    this_ptr->Reloader_Enable();
+//                    this_ptr->Change_ShootVal_TC();
+//                    this_ptr->Friction_Stop();
+//                    this_ptr->Reloader_Stop();
+//                    if(!this_ptr->is_triggers_locked)
+//                    {
+//                        if(this_ptr->cmd_instance->Check_TC_KeyUp('R',this_ptr->cmd_instance->TC_cmd->kb.bit.R))
+//                        {
+//                            this_ptr->ChangeState(Ready);
+//                            return;
+//                        }
+//                    }
+//                    else if(this_ptr->cmd_instance->Check_TC_KeyUp('R',this_ptr->cmd_instance->TC_cmd->kb.bit.R))
+//                    {
+//                        this_ptr->is_triggers_locked = false;
+//                    }
+//                    break;
+//                    // endregion
+//                case Ready: // region Ready
+//                    /*
+//                     * 摩擦轮给指定速度
+//                     * 摩擦轮、拨弹盘使能
+//                     * 检测 R键 按下 进入Enable状态
+//                     * 检测 左键 抬起 且弹频率<=1 进入OneShoot状态
+//                     * 检测 左键 按住 且弹频率 >1 进入StartShoot状态
+//                     */
+//                    this_ptr->Friction_Enable();
+//                    this_ptr->Reloader_Enable();
+//                    this_ptr->Change_ShootVal_TC();
+//                    this_ptr->Friction_UpdateSpeed();
+//                    this_ptr->Reloader_Stop();
+//                    if(this_ptr->cmd_instance->Check_TC_KeyDown('R',this_ptr->cmd_instance->TC_cmd->kb.bit.R))
+//                    {
+//                        this_ptr->ChangeState(Enable);
+//                        return;
+//                    }
+//                    if(this_ptr->cmd_instance->Check_TC_KeyUp('l',this_ptr->cmd_instance->TC_cmd->mouse.press_l) &&
+//                        this_ptr->shoot_freq <= 1)
+//                    {
+//                        this_ptr->ChangeState(OneShoot);
+//                        return;
+//                    }
+//                    if(this_ptr->cmd_instance->Check_TC_KeyPress('l',this_ptr->cmd_instance->TC_cmd->mouse.press_l) &&
+//                        this_ptr->shoot_freq > 1)
+//                    {
+//                        this_ptr->ChangeState(StartShoot);
+//                        return;
+//                    }
+//                    break;
+//                    // endregion
+//                case OneShoot: // region OneShoot
+//                    /*
+//                     * 摩擦轮给指定速度
+//                     * 摩擦轮、拨弹盘使能
+//                     * 检测 调用卡弹检测函数 是否进入Stuck状态
+//                     * 计时器没到单发时长，计时器计时
+//                     * 计时器没到单发时长，调用发射函数
+//                     * 计时器到单发时长，回到Ready状态
+//                     */
+//                    this_ptr->Friction_Enable();
+//                    this_ptr->Reloader_Enable();
+//                    this_ptr->Friction_UpdateSpeed();
+//                    if(this_ptr->cmd_instance->Get_RC_SW2State() <= RobotCMD_n::CMD_LOW)
+//                    {
+//                        this_ptr->ChangeState(Disable);
+//                        return;
+//                    }
+//                    if(this_ptr->Check_Stuck())
+//                    {
+//                        this_ptr->ChangeState(Stuck);
+//                        return;
+//                    }
+//                    if(this_ptr->timer_delta_t < ONE_SHOT_TIME)
+//                    {
+//                        this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
+//                        this_ptr->DoShoot(1,2);
+//                    }
+//                    else
+//                    {
+//                        this_ptr->ChangeState(Ready);
+//                        return;
+//                    }
+//                    break;
+//                    // endregion
+//                case StartShoot: // region StartShoot
+//                    /*
+//                     * 摩擦轮给指定速度
+//                     * 摩擦轮、拨弹盘使能
+//                     * 调用发射函数
+//                     * 检测 调用卡弹检测函数 是否进入Stuck状态
+//                     * 检测 左键 抬起 回到Ready状态
+//                     */
+//                    this_ptr->Friction_Enable();
+//                    this_ptr->Reloader_Enable();
+//                    this_ptr->Friction_UpdateSpeed();
+//                    this_ptr->DoShoot();
+//                    if(this_ptr->Check_Stuck())
+//                    {
+//                        this_ptr->ChangeState(Stuck);
+//                        return;
+//                    }
+//                    if(this_ptr->cmd_instance->Check_TC_KeyUp('l',this_ptr->cmd_instance->TC_cmd->mouse.press_l))
+//                    {
+//                        this_ptr->ChangeState(Ready);
+//                        return;
+//                    }
+//                    break;
+//                    // endregion
+//                case Stuck: // region Stuck
+//                    /*
+//                     * 摩擦轮给指定速度
+//                     * 摩擦轮、拨弹盘使能
+//                     * 计时器没到回退时长，计时器计时
+//                     * 计时器没到回退时长，拨弹盘反转
+//                     * 计时器到回退时长，进入Ready状态 (O,o)! 理论上会出现单发卡弹直接不发的情况，可能需要last_state解决
+//                     */
+//                    this_ptr->Friction_Enable();
+//                    this_ptr->Reloader_Enable();
+//                    this_ptr->Friction_UpdateSpeed();
+//                    if(this_ptr->timer_delta_t < STUCK_TIME)
+//                    {
+//                        this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
+//                        this_ptr->Reloader_StuckBack();
+//                    }
+//                    else
+//                    {
+//                        this_ptr->ChangeState(Ready);
+//                        return;
+//                    }
+//                    break;
+//                    // endregion
+//                default:
+//                    break;
+//            }
+//        }
+//        else
+//        {
+//            this_ptr->is_triggers_locked = false;
+//            this_ptr->ChangeState(Disable);
+//            this_ptr->Friction_Disable();
+//            this_ptr->Reloader_Disable();
+//        }
+        // endregion
     }
 
 // endregion

@@ -117,15 +117,15 @@ void MX_FREERTOS_Init(void) {
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* definition and creation of MainLoop */
-  osThreadDef(MainLoop, MainLoop_Task, osPriorityHigh, 0, 128);
+  osThreadDef(MainLoop, MainLoop_Task, osPriorityHigh, 0, 512);
   MainLoopHandle = osThreadCreate(osThread(MainLoop), NULL);
 
   /* definition and creation of MotorLoop */
-  osThreadDef(MotorLoop, MotorLoop_Task, osPriorityNormal, 0, 128);
+  osThreadDef(MotorLoop, MotorLoop_Task, osPriorityNormal, 0, 512);
   MotorLoopHandle = osThreadCreate(osThread(MotorLoop), NULL);
 
   /* definition and creation of StateLoop */
-  osThreadDef(StateLoop, StateLoop_Task, osPriorityLow, 0, 128);
+  osThreadDef(StateLoop, StateLoop_Task, osPriorityLow, 0, 512);
   StateLoopHandle = osThreadCreate(osThread(StateLoop), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */

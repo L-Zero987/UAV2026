@@ -68,7 +68,7 @@ void MotorLoop_Task(void const * argument)
     while (1)
     {
 #if (IS_DEBUG_MODE == 0)
-        DJI_Motor_n::DJIMotorControl();
+        DJI_Motor_n::DJIMotorControl(); // 统一发送
         gimbal_instance->pitch_motor->Transmit();
 #else
         debug_instance->MotorLoop();

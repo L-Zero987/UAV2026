@@ -1,23 +1,26 @@
 
 
-OpenDocument="debug_task.hpp", FilePath="F:/CubeMX_Project/ACE_Project/UAV2026/ACE_ECF/app/debug_task/debug_task.hpp", Line=0
+OpenDocument="bsp_dwt.cpp", FilePath="F:/CubeMX_Project/ACE_Project/UAV2026/ACE_ECF_25/Bsp/dwt/bsp_dwt.cpp", Line=160
+OpenDocument="debug_task.cpp", FilePath="F:/CubeMX_Project/ACE_Project/UAV2026/UAV_MainCode/debug_task/debug_task.cpp", Line=0
+OpenDocument="main_task.cpp", FilePath="F:/CubeMX_Project/ACE_Project/UAV2026/UAV_MainCode/main_task.cpp", Line=28
 OpenDocument="startup_stm32f405xx.s", FilePath="F:/CubeMX_Project/ACE_Project/UAV2026/startup_stm32f405xx.s", Line=52
-OpenDocument="tasks.c", FilePath="F:/CubeMX_Project/ACE_Project/UAV2026/Middlewares/Third_Party/FreeRTOS/Source/tasks.c", Line=3631
 OpenDocument="main.c", FilePath="F:/CubeMX_Project/ACE_Project/UAV2026/Core/Src/main.c", Line=64
 OpenToolbar="Debug", Floating=0, x=0, y=0
-OpenWindow="Registers 1", DockArea=RIGHT, x=0, y=1, w=350, h=334, FilterBarShown=0, TotalValueBarShown=0, ToolBarShown=0, FilteredItems=[], RefreshRate=1
-OpenWindow="Source Files", DockArea=LEFT, x=0, y=0, w=618, h=284, FilterBarShown=0, TotalValueBarShown=0, ToolBarShown=0
-OpenWindow="Disassembly", DockArea=RIGHT, x=0, y=0, w=350, h=279, FilterBarShown=0, TotalValueBarShown=0, ToolBarShown=0
-OpenWindow="Watched Data 1", DockArea=LEFT, x=0, y=1, w=618, h=329, FilterBarShown=0, TotalValueBarShown=0, ToolBarShown=0
+OpenWindow="Registers 1", DockArea=RIGHT, x=0, y=1, w=350, h=333, FilterBarShown=0, TotalValueBarShown=0, ToolBarShown=0, FilteredItems=[], RefreshRate=1
+OpenWindow="Source Files", DockArea=LEFT, x=0, y=0, w=618, h=286, FilterBarShown=0, TotalValueBarShown=0, ToolBarShown=0
+OpenWindow="Disassembly", DockArea=RIGHT, x=0, y=0, w=350, h=280, FilterBarShown=0, TotalValueBarShown=0, ToolBarShown=0
+OpenWindow="Watched Data 1", DockArea=LEFT, x=0, y=1, w=618, h=327, FilterBarShown=0, TotalValueBarShown=0, ToolBarShown=0
 OpenWindow="Data Sampling", DockArea=BOTTOM, x=0, y=0, w=651, h=310, FilterBarShown=0, TotalValueBarShown=0, ToolBarShown=0, VisibleTab=0, UniformSampleSpacing=0
 OpenWindow="Timeline", DockArea=BOTTOM, x=1, y=0, w=1268, h=310, FilterBarShown=0, TotalValueBarShown=0, ToolBarShown=1, DataPaneShown=1, PowerPaneShown=1, CodePaneShown=1, PinCursor="Cursor Movable", TimePerDiv="1 ns / Div", TimeStampFormat="Time", DataGraphDrawAsPoints=0, DataGraphLegendShown=1, DataGraphUniformSampleSpacing=0, DataGraphLegendPosition="1067;-5", DataGraphShowNamesAtCursor=0, PowerGraphDrawAsPoints=0, PowerGraphLegendShown=1, PowerGraphAvgFilterTime=Off, PowerGraphAvgFilterLen=Off, PowerGraphUniformSampleSpacing=0, PowerGraphLegendPosition="1067;-4", CodeGraphLegendShown=1, CodeGraphLegendPosition="1025;0"
 SmartViewPlugin="", Page="", Toolbar="Hidden", Window="SmartView 1"
-TableHeader="Source Files", SortCol="File", SortOrder="ASCENDING", VisibleCols=["File";"Status";"Size";"#Insts";"Path"], ColWidths=[233;100;100;100;840]
+TableHeader="Source Files", SortCol="File", SortOrder="DESCENDING", VisibleCols=["File";"Status";"Size";"#Insts";"Path"], ColWidths=[233;100;100;100;812]
 TableHeader="Data Sampling Table", SortCol="None", SortOrder="ASCENDING", VisibleCols=["Index";"Time"], ColWidths=[100;100]
 TableHeader="Data Sampling Setup", SortCol="Expression", SortOrder="DESCENDING", VisibleCols=["Expression";"Type";"Value";"Min";"Max";"Average";"# Changes";"Min. Change";"Max. Change"], ColWidths=[266;100;100;100;100;100;100;107;107]
 TableHeader="Power Sampling", SortCol="None", SortOrder="ASCENDING", VisibleCols=["Index";"Time";"Ch 0"], ColWidths=[100;100;100]
 TableHeader="Registers 1", SortCol="Name", SortOrder="ASCENDING", VisibleCols=["Name";"Value";"Description"], ColWidths=[100;118;259]
-TableHeader="Watched Data 1", SortCol="Expression", SortOrder="ASCENDING", VisibleCols=["Expression";"Value";"Location";"Refresh";"Access"], ColWidths=[207;100;100;271;100]
+TableHeader="Watched Data 1", SortCol="Expression", SortOrder="ASCENDING", VisibleCols=["Expression";"Value";"Location";"Refresh";"Access"], ColWidths=[207;100;100;211;100]
 TableHeader="RegisterSelectionDialog", SortCol="None", SortOrder="ASCENDING", VisibleCols=[], ColWidths=[]
 TableHeader="TargetExceptionDialog", SortCol="Name", SortOrder="ASCENDING", VisibleCols=["Name";"Value";"Address";"Description"], ColWidths=[200;100;100;351]
-WatchedExpression="debug_instance", RefreshRate=5, Window=Watched Data 1
+WatchedExpression="fire_instance", Window=Watched Data 1
+WatchedExpression="gimbal_instance", Window=Watched Data 1
+WatchedExpression="debug_instance", Window=Watched Data 1

@@ -7,7 +7,17 @@ namespace Debug_n
 
     }
 
-    void Debug_c::Loop1(void)
+    void Debug_c::MainLoop()
+    {
+
+    }
+
+    void Debug_c::MotorLoop()
+    {
+
+    }
+
+    void Debug_c::StateLoop()
     {
 
     }

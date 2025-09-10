@@ -4,14 +4,14 @@
 namespace Config_n
 {
 /*============================== 代码层配置 ==============================*/
-#define IS_DEBUG_MODE 0u // 是否是debug模式，0为否，1为是，开启debug模式后，常规任务将被关闭，开启debug任务，一些debug变量也被赋予内存，方便ozone查看
+#define IS_DEBUG_MODE 1u // 是否是debug模式，0为否，1为是，开启debug模式后，常规任务将被关闭，开启debug任务，一些debug变量也被赋予内存，方便ozone查看
 
 
 /*============================== 设备层配置 ==============================*/
 /* region 发射机构 */
 // 摩擦轮
-#define FRICTION_MOTOR_NUMS 3           // 摩擦轮电机数量
-#define FRICTION_WHEEL_RADIUS 0.06f     // 轮半径，单位m
+#define FRICTION_MOTOR_NUMS     3       // 摩擦轮电机数量
+#define FRICTION_WHEEL_RADIUS   0.06f   // 轮半径，单位m
 
 // 下摩擦轮
 #define FRICTION_WHEEL_DOWN_PID_KP 6.0f

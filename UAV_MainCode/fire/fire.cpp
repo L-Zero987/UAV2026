@@ -68,20 +68,20 @@ Fire_c* this_ptr = nullptr;
                         .tx_id = FRICTION_WHEEL_DOWN_ID,
                 }
         };
-        this->friction_motor[0] = new DJI_Motor_n::DJI_Motor_Instance(_config_friction);
+        this->friction_motor[FRICTION_WHEEL_DOWN_ID - 1] = new DJI_Motor_n::DJI_Motor_Instance(_config_friction);
 
         _config_friction.controller_param_init_config.speed_PID.Kp = FRICTION_WHEEL_L_PID_KP;
         _config_friction.controller_param_init_config.speed_PID.Ki = FRICTION_WHEEL_L_PID_KI;
         _config_friction.controller_param_init_config.speed_PID.Kd = FRICTION_WHEEL_L_PID_KD;
         _config_friction.can_init_config.tx_id = FRICTION_WHEEL_L_ID;
-        this->friction_motor[1] = new DJI_Motor_n::DJI_Motor_Instance(_config_friction);
+        this->friction_motor[FRICTION_WHEEL_L_ID - 1] = new DJI_Motor_n::DJI_Motor_Instance(_config_friction);
 
         _config_friction.controller_param_init_config.speed_PID.Kp = FRICTION_WHEEL_R_PID_KP;
         _config_friction.controller_param_init_config.speed_PID.Ki = FRICTION_WHEEL_R_PID_KI;
         _config_friction.controller_param_init_config.speed_PID.Kd = FRICTION_WHEEL_R_PID_KD;
         _config_friction.can_init_config.can_handle = &hcan1; // (O,o)! 临时的can1捏
         _config_friction.can_init_config.tx_id = FRICTION_WHEEL_R_ID;
-        this->friction_motor[2] = new DJI_Motor_n::DJI_Motor_Instance(_config_friction);
+        this->friction_motor[FRICTION_WHEEL_R_ID - 1] = new DJI_Motor_n::DJI_Motor_Instance(_config_friction);
     }
 
     void Fire_c::Reloader_Init()

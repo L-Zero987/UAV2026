@@ -6,23 +6,15 @@
 
 namespace Debug_n
 {
-    typedef struct
-    {
-
-    } Debug_Log_t;
-
-    typedef struct
-    {
-
-    } Debug_Value_t;
-
     class Debug_c
     {
     public:
 
         Debug_c(void);
 
-        void Loop1(void);
+        void MainLoop(void);
+        void MotorLoop(void);
+        void StateLoop(void);
     private:
     };
 

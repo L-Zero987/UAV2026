@@ -331,7 +331,7 @@ namespace GIMBAL_N
 
     // 总 云台初始化
     void gimbal_init(const INS_t *pINS, uint8_t use_IMU) // 重载函数，传入陀螺仪数据指针
-    { // (O,o)? 重载在哪？
+    { // (O,o)?
         ins = gimbal_c::get_instance(); // 这跟方法内容是否重复
         ins->motor_init();
         ins->imu_data = pINS;

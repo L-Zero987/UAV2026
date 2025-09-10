@@ -1,11 +1,13 @@
 #ifndef __GIMBAL_HPP
 #define __GIMBAL_HPP
 
+#include "Config.hpp"
 #include "dji_motor.hpp"
 #include "dm_mit_mode.hpp"
 #include "BMI088driver.hpp"
 #include "bsp_dwt.hpp"
 #include "robot_cmd.hpp"
+#include "lqr_alg.hpp"
 
 namespace Gimbal_n
 {
@@ -17,15 +19,61 @@ namespace Gimbal_n
         AutoControl        = 0x03, // 自瞄
     } Gimbal_State_e;
 
+    class Yaw_c
+    {
+    public:
+        DJI_Motor_n::DJI_Motor_Instance *motor;
+        pid_alg_n::pid_alg_c            *pid_i;     // 用于lqr
+        lqr_alg_n::lqr_alg_c            *lqr;
+        float k_lqr[2] = {YAW_MOTOR_LQR_1, YAW_MOTOR_LQR_2};
+
+        static Yaw_c* Get_InstancePtr(void);
+
+    private:
+        float set_pos_ = 0; // 一般是设置的目标值
+        float pos_error_ = 0;
+        float pos_ = 0; // 当前位置
+        float vel_ = 0; // 当前速度
+        float output_ = 0;
+
+        Yaw_c();
+
+        void Motor_Init(void);
+        void Model_Init(void);
+    };
+
+    class Pitch_c
+    {
+    public:
+        DM_Motor_n::DM_Mit_Mode_c       *motor;
+        pid_alg_n::pid_alg_c            *pid_angle;
+        pid_alg_n::pid_alg_c            *pid_i;   // 用于lqr
+        lqr_alg_n::lqr_alg_c            *lqr;
+        float k_lqr[2] = {PITCH_MOTOR_LQR_1, PITCH_MOTOR_LQR_2};
+
+        static Pitch_c* Get_InstancePtr(void);
+
+    private:
+        float set_pos_ = 0; // 一般是设置的目标值
+        float pos_error_ = 0;
+        float pos_ = 0; // 当前位置
+        float vel_ = 0; // 当前速度
+        float output_ = 0;
+
+        Pitch_c();
+
+        void Motor_Init(void);
+        void Model_Init(void);
+    };
+
     class Gimbal_c
     {
     public:
         /* instance ptr */
-        DJI_Motor_n::DJI_Motor_Instance *yaw_motor;
-        DM_Motor_n::DM_Mit_Mode_c       *pitch_motor;
-        pid_alg_n::pid_alg_c            *pitch_angle_pid;
-        BMI088Instance_c                *imu;
-        const INS_t                     *imu_date;
+        Yaw_c               *yaw;
+        Pitch_c             *pitch;
+        BMI088Instance_c    *imu;
+        const INS_t         *imu_date;
         // 看情况加滤波
 
         /* function */
@@ -59,8 +107,7 @@ namespace Gimbal_n
         Gimbal_c();
 
         /* function */
-        void Yaw_Init(void);
-        void Pitch_Init(void);
+        void Motor_Init(void);
         void IMU_Init(void);
 
         void Change_PIDWithIMU(void);

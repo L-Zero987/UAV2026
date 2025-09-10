@@ -60,7 +60,7 @@ endfunction()
 ###############################在此处添加你的文件路径
 USER_ADD_DIR(${CMAKE_SOURCE_DIR}/ACE_ECF_25/Algorithm/filter_alg)
 USER_ADD_DIR(${CMAKE_SOURCE_DIR}/ACE_ECF_25/Algorithm/kalman_filter)
-#USER_ADD_DIR(${CMAKE_SOURCE_DIR}/ACE_ECF_25/Algorithm/lqr)
+USER_ADD_DIR(${CMAKE_SOURCE_DIR}/ACE_ECF_25/Algorithm/lqr)
 USER_ADD_DIR(${CMAKE_SOURCE_DIR}/ACE_ECF_25/Algorithm/PID)
 USER_ADD_DIR(${CMAKE_SOURCE_DIR}/ACE_ECF_25/Algorithm/quaternion_kalman)
 #USER_ADD_DIR(${CMAKE_SOURCE_DIR}/ACE_ECF_25/Algorithm/RLS)

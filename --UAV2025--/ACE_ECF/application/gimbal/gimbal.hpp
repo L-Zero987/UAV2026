@@ -32,7 +32,7 @@ namespace GIMBAL_N
     };
 
     class pitch_c // 继承电机类，DM4310 采用力控
-    { // (O,o)? 继承了啥？
+    {
     public:
         lqr_alg_n::lqr_alg_c lqr;
         pid_alg_n::pid_alg_c pid_only_i;

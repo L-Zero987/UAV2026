@@ -1,6 +1,4 @@
 #include "gimbal.hpp"
-#include "Config.hpp"
-
 extern "C"
 {
 #include "main.h"
@@ -9,33 +7,32 @@ extern "C"
 
 namespace Gimbal_n
 {
-    /* region 神秘DM框架适配 */
-    void pitch_rx_call_back(BSP_CAN_Part_n::CANInstance_c *registerinstance)
-    {
-        Gimbal_c *ins = Gimbal_c::Get_InstancePtr();
-        int p_int, v_int, t_int;
-        uint8_t rx_buf[8] = {0};
-        memcpy(rx_buf, registerinstance->rx_buff, 8); // 存储数据，防止变化
-//        ins->pitch_motor->get_data_.id = (rx_buf[0]) & 0x0F;
-        ins->pitch_motor->get_data_.nowState = (DM_Motor_n::DM_NowState_e)(rx_buf[0] >> 4);
-        p_int = (rx_buf[1] << 8) | rx_buf[2];
-        v_int = (rx_buf[3] << 4) | (rx_buf[4] >> 4);
-        t_int = ((rx_buf[4] & 0xF) << 8) | rx_buf[5];
-        ins->pitch_motor->get_data_.mos_temperture = rx_buf[6];
-        ins->pitch_motor->get_data_.motor_temperture = rx_buf[7];
-        ins->pitch_motor->get_data_.postion = DM_Motor_n::uint_to_float(p_int, -2, 2, 16);    // (-12.5,12.5)
-        ins->pitch_motor->get_data_.velocity = DM_Motor_n::uint_to_float(v_int, -45, 45, 12); // (-45.0,45.0)
-        ins->pitch_motor->get_data_.toeque = DM_Motor_n::uint_to_float(t_int, -18, 18, 12);   //(-18.0,18.0)
-    }
-    // endregion
-
     /* region 宏以及变量声明 */
 #define RAD_TO_ANGLE               57.29f // 弧度转角度的系数
 #define DISABLE_TIME               0.5f   // 失能处理时间
 #define CHANGE_STATE_TIME          2.0f   // 摇杆切换状态时间
 
-Gimbal_c* this_ptr = nullptr;
-user_maths_c math_;
+    Gimbal_c* this_ptr = nullptr;
+    user_maths_c math_;
+    // endregion
+
+    /* region 神秘DM框架适配 */
+    void pitch_rx_call_back(BSP_CAN_Part_n::CANInstance_c *registerinstance)
+    {
+        int p_int, v_int, t_int;
+        uint8_t rx_buf[8] = {0};
+        memcpy(rx_buf, registerinstance->rx_buff, 8); // 存储数据，防止变化
+//        ins->pitch_motor->get_data_.id = (rx_buf[0]) & 0x0F;
+        this_ptr->pitch->motor->get_data_.nowState = (DM_Motor_n::DM_NowState_e)(rx_buf[0] >> 4);
+        p_int = (rx_buf[1] << 8) | rx_buf[2];
+        v_int = (rx_buf[3] << 4) | (rx_buf[4] >> 4);
+        t_int = ((rx_buf[4] & 0xF) << 8) | rx_buf[5];
+        this_ptr->pitch->motor->get_data_.mos_temperture = rx_buf[6];
+        this_ptr->pitch->motor->get_data_.motor_temperture = rx_buf[7];
+        this_ptr->pitch->motor->get_data_.postion = DM_Motor_n::uint_to_float(p_int, -2, 2, 16);    // (-12.5,12.5)
+        this_ptr->pitch->motor->get_data_.velocity = DM_Motor_n::uint_to_float(v_int, -45, 45, 12); // (-45.0,45.0)
+        this_ptr->pitch->motor->get_data_.toeque = DM_Motor_n::uint_to_float(t_int, -18, 18, 12);   //(-18.0,18.0)
+    }
     // endregion
 
     /* region 实例创建 */
@@ -48,18 +45,44 @@ user_maths_c math_;
 
     Gimbal_c::Gimbal_c()
     {
-        this->Yaw_Init();
-        this->Pitch_Init();
         this->IMU_Init();
+        this->yaw            = Yaw_c::Get_InstancePtr();
+        this->pitch          = Pitch_c::Get_InstancePtr();
         this->cmd_instance   = RobotCMD_n::RobotCMD_c::Get_InstancePtr();
         this->timer_instance = BSP_DWT_n::BSP_DWT_c::ECF_Get_DwtInstance();
         this->is_loop = true;
     }
+
+    Yaw_c* Yaw_c::Get_InstancePtr()
+    {
+        static Yaw_c _instance;
+        return &_instance;
+    }
+
+    Pitch_c* Pitch_c::Get_InstancePtr()
+    {
+        static Pitch_c _instance;
+        return &_instance;
+    }
+
+    Yaw_c::Yaw_c()
+    {
+        this->Motor_Init();
+        this->Model_Init();
+    }
+
+    Pitch_c::Pitch_c()
+    {
+        this->Motor_Init();
+        this->Model_Init();
+    }
+
 // endregion
 
     /* region 初始化 */
-    void Gimbal_c::Yaw_Init()
+    void Yaw_c::Motor_Init()
     {
+#if (GIMBAL_IS_USE_PID == 0x01u)
         Motor_General_Def_n::Motor_Init_Config_s _config = {
                 .controller_param_init_config = {
 //                        .current_PID = {
@@ -108,11 +131,64 @@ user_maths_c math_;
                 },
                 .zero_offset = 120,
         };
-        this->yaw_motor = new DJI_Motor_n::DJI_Motor_Instance(_config);
+        this->motor = new DJI_Motor_n::DJI_Motor_Instance(_config);
+#else
+        // 电机编码值闭环使用pid，imu闭环使用lqr
+        Motor_General_Def_n::Motor_Init_Config_s _config = {
+                .controller_param_init_config = {
+                        .current_PID = {
+                                .Kp = 1,
+                                .Ki = 0,
+                                .Kd = 0,
+                                .ActualValueSource = NULL,
+                                .mode = Output_Limit | Integral_Limit,
+                                .max_out = 0,
+                                .max_Ierror = 200,
+                                .deadband = 5,
+                        },
+                        .speed_PID = {
+                                .Kp = 3,
+                                .Ki = 0,
+                                .Kd = 0.03,
+                                .ActualValueSource = NULL,
+                                .mode = Output_Limit | Integral_Limit,
+                                .max_out = YAW_MOTOR_SPEED_MAX_OUT,
+                                .max_Ierror = 200,
+                                .deadband = 0.3,
+                        },
+                        .angle_PID = {
+                                .Kp = 6,
+                                .Ki = 0,
+                                .Kd = 0.2,
+                                .ActualValueSource = NULL,
+                                .mode = Output_Limit | Integral_Limit,
+                                .max_out = 16000, // 角度转出角速度后最大为300
+                                .max_Ierror = 200,
+                                .deadband = 0.3,
+                        },
+                },
+                .controller_setting_init_config = {
+                        .outer_loop_type = Motor_General_Def_n::ANGLE_LOOP, // lqr直接开环
+                        .close_loop_type = Motor_General_Def_n::OPEN_LOOP,
+                        .motor_reverse_flag = Motor_General_Def_n::MOTOR_DIRECTION_NORMAL,
+                        .feedback_reverse_flag = Motor_General_Def_n::FEEDBACK_DIRECTION_NORMAL,
+                        .angle_feedback_source = Motor_General_Def_n::MOTOR_FEED, // 陀螺仪反馈
+                        .speed_feedback_source = Motor_General_Def_n::MOTOR_FEED, // 一般使用陀螺仪反馈
+                },
+                .motor_type = Motor_General_Def_n::GM6020,
+                .can_init_config = {
+                        .can_handle = &hcan1,
+                        .tx_id = 2, // 看电调闪几下就填几
+                },
+                .zero_offset = 120,
+        };
+        this->motor = new DJI_Motor_n::DJI_Motor_Instance(_config);
+#endif
     }
 
-    void Gimbal_c::Pitch_Init()
+    void Pitch_c::Motor_Init()
     {
+#if (GIMBAL_IS_USE_PID == 0x01u)
         DM_Motor_n::DM_ModePrame_s _config = {
                 // 速度kp-0.00372 0.01572
                 .kp_max = 500,
@@ -139,21 +215,103 @@ user_maths_c math_;
                 },
                 .output = {.p_des = 0, .v_des = 0, .Kp = 0, .Kd = 0, .t_des = 0},
         };
-        this->pitch_motor = new DM_Motor_n::DM_Mit_Mode_c(&_config);
-        this->pitch_motor->ECF_SetRxCallBack(pitch_rx_call_back);
-        this->pitch_motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
+        this->motor = new DM_Motor_n::DM_Mit_Mode_c(&_config);
+        this->motor->ECF_SetRxCallBack(pitch_rx_call_back);
+        this->motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
+#else
+        DM_Motor_n::DM_ModePrame_s _config = {
+                // 速度kp-0.00372 0.01572
+                .kp_max = 500,
+                .kp_min = 0,
+                .kd_min = 0,
+                .kd_max = 5,
+                .v_min = -30,
+                .v_max = 30,
+                .p_min = -2,
+                .p_max = 2,
+                .t_min = -10,
+                .t_max = 10,
+                // 位置速度
+                .postion_bits = 16,
+                .velocity_bits = 12,
+                .toeque_bits = 12,
+                .kp_bits = 12,
+                .kd_bits = 12,
+                .can_init_config = {
+                        .can_handle = &hcan1,
+                        .tx_id = 0x01,
+                        .rx_id = 0x11,
+                        .SAND_IDE = CAN_ID_STD,
+                },
+                .output = {.p_des = 0, .v_des = 0, .Kp = PITCH_MOTOR_PID_A_KP, .Kd = PITCH_MOTOR_PID_A_KP, .t_des = 0},
+        };
+        this->motor = new DM_Motor_n::DM_Mit_Mode_c(&_config);
+        this->motor->ECF_SetRxCallBack(pitch_rx_call_back);
+        this->motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
+#endif
+    }
 
+    void Yaw_c::Model_Init()
+    {
+#if (GIMBAL_IS_USE_PID == 0x01u)
+        // PID已在电机框架内置
+#else
+        this->lqr = new lqr_alg_n::lqr_alg_c(2, 1, this->k_lqr);
+        pid_alg_n::PID_Init_Config_t _config = {
+            .Kp = 0,
+            .Ki = -0.0006f, // 0.02
+            .Kd = 0,
+            .Kfa = 0,
+            .Kfb = 0,
+            .ActualValueSource = &pos_,
+            .mode = Integral_Limit | Separated_Integral | Feedforward,
+            .max_out = 600,
+            .max_Ierror = 200,
+            .deadband = 0,
+            .threshold_max = 0.5,
+            .threshold_min = -0.5,
+            .errorabsmax = 0.2,
+            .errorabsmin = 0,
+        };
+        this->pid_i = new pid_alg_n::pid_alg_c(_config);
+#endif
+    }
+
+    void Pitch_c::Model_Init()
+    {
+#if (GIMBAL_IS_USE_PID == 0x01u)
         pid_alg_n::PID_Init_Config_t _pid_config = {
                 .Kp = PITCH_MOTOR_PID_A_KP,
                 .Ki = PITCH_MOTOR_PID_A_KI,
                 .Kd = PITCH_MOTOR_PID_A_KD,
                 .ActualValueSource = NULL,
                 .mode = Output_Limit | Integral_Limit,
-                .max_out = 16000, // 角度转出角速度后最大为300
+                .max_out = 160, // (O,o)? 需要调
                 .max_Ierror = 200,
                 .deadband = 0.3,
         };
-        this->pitch_angle_pid = new pid_alg_n::pid_alg_c(_pid_config);
+        this->pid_angle = new pid_alg_n::pid_alg_c(_pid_config);
+#else
+        this->lqr = new lqr_alg_n::lqr_alg_c(2, 1, this->k_lqr);
+        pid_alg_n::PID_Init_Config_t _config = {
+            .Kp = 0,
+            .Ki = PITCH_MOTOR_PID_I_KI,
+            .Kd = 0,
+            .Kfa = 10,
+            .Kfb = 0,
+            .ActualValueSource = &set_pos_,
+            .mode = Integral_Limit | Separated_Integral | Feedforward | Output_Limit,
+            .max_out = 3,
+            .max_Ierror = 800,
+            .deadband = 0,
+            .threshold_max = 2.5,
+            .threshold_min = -2.5,
+            .errorabsmax = 4,
+            .errorabsmin = 0,
+            .stepIn = 3,
+        };
+        this->pid_i = new pid_alg_n::pid_alg_c(_config);
+#endif
     }
 
     void Gimbal_c::IMU_Init()
@@ -172,8 +330,8 @@ user_maths_c math_;
     /* region 功能函数 */
     inline void Gimbal_c::Change_PIDWithEncoder()
     {
-        this->target_yaw = this->yaw_motor->MotorMeasure.measure.record_ecd;
-        this->target_pitch = this->pitch_motor->get_data_.postion;
+        this->target_yaw = this->yaw->motor->MotorMeasure.measure.record_ecd;
+        this->target_pitch = this->pitch->motor->get_data_.postion;
         this->Yaw_SetOutput_Encoder();
         this->Pitch_SetOutput_Encoder();
     }
@@ -199,16 +357,16 @@ user_maths_c math_;
         // math_.loop_fp32_constrain()
 
         // 转为int防止问题
-        float can_increased = (YAW_ECD_MAX - (int16_t)this->yaw_motor->MotorMeasure.measure.feedback_ecd) / 8192.0f * 360.0f;
-        float can_decreased = ((int16_t)this->yaw_motor->MotorMeasure.measure.feedback_ecd - YAW_ECD_MIN) / 8192.0f * 360.0f;
+        float can_increased = (YAW_ECD_MAX - (int16_t)this->yaw->motor->MotorMeasure.measure.feedback_ecd) / 8192.0f * 360.0f;
+        float can_decreased = ((int16_t)this->yaw->motor->MotorMeasure.measure.feedback_ecd - YAW_ECD_MIN) / 8192.0f * 360.0f;
         float yaw_min = this->actual_yaw - can_increased; // YAW周和编码值相反 ,yaw_min为正，yaw_max为负
         float yaw_max = this->actual_yaw + can_decreased;
         // yaw_min = filter_alg_n::Recursive_ave_filter(&yaw_filter, yaw_min,20);
         // yaw_max = filter_alg_n::Recursive_ave_filter(&yaw_filter, yaw_max,20);
-        if ((YAW_ECD_MAX - (int16_t)this->yaw_motor->MotorMeasure.measure.feedback_ecd) < -1500 ||
-        ((int16_t)this->yaw_motor->MotorMeasure.measure.feedback_ecd - YAW_ECD_MIN) < -1500)
+        if ((YAW_ECD_MAX - (int16_t)this->yaw->motor->MotorMeasure.measure.feedback_ecd) < -1500 ||
+        ((int16_t)this->yaw->motor->MotorMeasure.measure.feedback_ecd - YAW_ECD_MIN) < -1500)
         {
-            yaw_motor->DJIMotorStop(); // (O,o)! 需要修改急停方案
+            yaw->motor->DJIMotorStop(); // (O,o)! 需要修改急停方案
         }
         this->target_yaw = math_.user_val_limit(this->target_yaw, yaw_min, yaw_max);
         // 机头向前陀螺仪左正右负，编码值左小右大
@@ -217,8 +375,8 @@ user_maths_c math_;
 
     void Gimbal_c::Pitch_AngleLimit()
     {
-        float can_increased = user_abs((PITCH_POS_MAX - this->pitch_motor->get_data_.postion) * RAD_TO_ANGLE);
-        float can_decreased = user_abs((this->pitch_motor->get_data_.postion - PITCH_POS_MIN) * RAD_TO_ANGLE);
+        float can_increased = user_abs((PITCH_POS_MAX - this->pitch->motor->get_data_.postion) * RAD_TO_ANGLE);
+        float can_decreased = user_abs((this->pitch->motor->get_data_.postion - PITCH_POS_MIN) * RAD_TO_ANGLE);
         float pitch_min = actual_pitch - can_decreased;
         float pitch_max = actual_pitch + can_increased;
         // 滤波
@@ -236,30 +394,30 @@ user_maths_c math_;
 
     inline void Gimbal_c::Pitch_SetOutput_Encoder()
     {
-        this->pitch_motor->Postion();
-        this->pitch_motor->HandOver(this->target_pitch,0,PITCH_MOTOR_PID_A_KP,PITCH_MOTOR_PID_A_KD,0);
+        this->pitch->motor->Postion();
+        this->pitch->motor->HandOver(this->target_pitch,0,PITCH_MOTOR_PID_A_KP,PITCH_MOTOR_PID_A_KD,0);
     }
 
     inline void Gimbal_c::Pitch_SetOutput_IMU()
     {
-        this->pitch_motor->Torque();
-        float _output = this->pitch_angle_pid->ECF_PID_Calculate(this->target_pitch, this->actual_pitch);
-        this->pitch_motor->HandOver(0,0,0,0,_output);
+        this->pitch->motor->Torque();
+        float _output = this->pitch->pid_angle->ECF_PID_Calculate(this->target_pitch, this->actual_pitch);
+        this->pitch->motor->HandOver(0,0,0,0,_output);
     }
 
     inline void Gimbal_c::Yaw_SetOutput_Encoder()
     {
-        this->yaw_motor->motor_settings.angle_feedback_source = Motor_General_Def_n::MOTOR_FEED;
-        this->yaw_motor->DJIMotorSetRef(this->target_yaw);
+        this->yaw->motor->motor_settings.angle_feedback_source = Motor_General_Def_n::MOTOR_FEED;
+        this->yaw->motor->DJIMotorSetRef(this->target_yaw);
     }
 
     inline void Gimbal_c::Yaw_SetOutput_IMU()
     {
-        if(this->yaw_motor->motor_settings.angle_feedback_source != Motor_General_Def_n::OTHER_FEED)
+        if(this->yaw->motor->motor_settings.angle_feedback_source != Motor_General_Def_n::OTHER_FEED)
         {
-            this->yaw_motor->Set_ANGLE_PID_other_feedback(&this->actual_yaw);
+            this->yaw->motor->Set_ANGLE_PID_other_feedback(&this->actual_yaw);
         }
-        this->yaw_motor->DJIMotorSetRef(this->target_yaw);
+        this->yaw->motor->DJIMotorSetRef(this->target_yaw);
     }
 
     inline void Gimbal_c::CtrlMove_DR16()
@@ -323,20 +481,20 @@ user_maths_c math_;
         switch (this->current_state)
         {
             case Disable:
-                this->yaw_motor->motor_controller.angle_PID.pid_measure_.Ierror = 0;
-                this->pitch_angle_pid->pid_measure_.Ierror = 0;
+                this->yaw->motor->motor_controller.angle_PID.pid_measure_.Ierror = 0;
+                this->pitch->pid_angle->pid_measure_.Ierror = 0;
                 break;
             case ControlWithEncoder:
-                this->yaw_motor->motor_controller.angle_PID.pid_measure_.Ierror = 0;
-                this->pitch_angle_pid->pid_measure_.Ierror = 0;
+                this->yaw->motor->motor_controller.angle_PID.pid_measure_.Ierror = 0;
+                this->pitch->pid_angle->pid_measure_.Ierror = 0;
                 break;
             case ControlWithIMU:
-                this->yaw_motor->motor_controller.angle_PID.pid_measure_.Ierror = 0;
-                this->pitch_angle_pid->pid_measure_.Ierror = 0;
+                this->yaw->motor->motor_controller.angle_PID.pid_measure_.Ierror = 0;
+                this->pitch->pid_angle->pid_measure_.Ierror = 0;
                 break;
             case AutoControl:
-                this->yaw_motor->motor_controller.angle_PID.pid_measure_.Ierror = 0;
-                this->pitch_angle_pid->pid_measure_.Ierror = 0;
+                this->yaw->motor->motor_controller.angle_PID.pid_measure_.Ierror = 0;
+                this->pitch->pid_angle->pid_measure_.Ierror = 0;
                 break;
             default:
                 break;
@@ -357,8 +515,8 @@ user_maths_c math_;
         if(_connect_state == RobotCMD_n::NOT_CONNECT)
         {
             this_ptr->ChangeState(Disable);
-            this_ptr->yaw_motor->DJIMotorStop();
-            this_ptr->pitch_motor->DMMotorStateSet(DM_Motor_n::DM_UNABLE);
+            this_ptr->yaw->motor->DJIMotorStop();
+            this_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_UNABLE);
             return;
         }
 
@@ -395,20 +553,20 @@ user_maths_c math_;
                 if(this_ptr->timer_delta_t < DISABLE_TIME)
                 {
                     this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
-                    this_ptr->yaw_motor->DJIMotorEnable();
+                    this_ptr->yaw->motor->DJIMotorEnable();
                     this_ptr->Yaw_AngleLimit();
                     this_ptr->Pitch_AngleLimit();
                     this_ptr->Yaw_SetOutput_Encoder();
                     this_ptr->Pitch_SetOutput_Encoder();
-                    if(this_ptr->pitch_motor->get_data_.nowState != DM_Motor_n::ENABLE)
+                    if(this_ptr->pitch->motor->get_data_.nowState != DM_Motor_n::ENABLE)
                     {
-                        this_ptr->pitch_motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE); // (O,o)! 设置状态要在发送缓冲区填充后
+                        this_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE); // (O,o)! 设置状态要在发送缓冲区填充后
                     }
                 }
                 else
                 {
-                    this_ptr->yaw_motor->DJIMotorStop();
-                    this_ptr->pitch_motor->DMMotorStateSet(DM_Motor_n::DM_UNABLE); // (O,o)? 失能下CAN总线仍会发送信息，是否有问题
+                    this_ptr->yaw->motor->DJIMotorStop();
+                    this_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_UNABLE); // (O,o)? 失能下CAN总线仍会发送信息，是否有问题
                 }
                 break;
                 // endregion
@@ -431,7 +589,7 @@ user_maths_c math_;
                     this_ptr->ChangeState(ControlWithIMU);
                     return;
                 }
-                this_ptr->yaw_motor->DJIMotorEnable();
+                this_ptr->yaw->motor->DJIMotorEnable();
                 if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_LOW)
                 {
                     this_ptr->ChangeState(Disable);
@@ -462,9 +620,9 @@ user_maths_c math_;
                 this_ptr->Pitch_AngleLimit();
                 this_ptr->Yaw_SetOutput_Encoder();
                 this_ptr->Pitch_SetOutput_Encoder();
-                if(this_ptr->pitch_motor->get_data_.nowState != DM_Motor_n::ENABLE)
+                if(this_ptr->pitch->motor->get_data_.nowState != DM_Motor_n::ENABLE)
                 {
-                    this_ptr->pitch_motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
+                    this_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
                 }
                 break;
                 // endregion
@@ -486,7 +644,7 @@ user_maths_c math_;
                  * 调用限位检测函数
                  * pitch 角度环计算，填充发送数据
                  */
-                this_ptr->yaw_motor->DJIMotorEnable();
+                this_ptr->yaw->motor->DJIMotorEnable();
                 if(_connect_state == RobotCMD_n::TC_CMD)
                 {
                     if(this_ptr->cmd_instance->Check_TC_KeyDown('r',this_ptr->cmd_instance->TC_cmd->mouse.press_r))
@@ -529,9 +687,9 @@ user_maths_c math_;
                 this_ptr->Pitch_AngleLimit();
                 this_ptr->Yaw_SetOutput_IMU();
                 this_ptr->Pitch_SetOutput_IMU();
-                if(this_ptr->pitch_motor->get_data_.nowState != DM_Motor_n::ENABLE)
+                if(this_ptr->pitch->motor->get_data_.nowState != DM_Motor_n::ENABLE)
                 {
-                    this_ptr->pitch_motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
+                    this_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
                 }
                 break;
                 // endregion
@@ -550,7 +708,7 @@ user_maths_c math_;
                  * 调用限位检测函数
                  * pitch 角度环计算，填充发送数据
                  */
-                this_ptr->yaw_motor->DJIMotorEnable();
+                this_ptr->yaw->motor->DJIMotorEnable();
                 if(_connect_state == RobotCMD_n::TC_CMD)
                 {
                     if(this_ptr->cmd_instance->Check_TC_KeyUp('r',this_ptr->cmd_instance->TC_cmd->mouse.press_r))
@@ -577,9 +735,9 @@ user_maths_c math_;
                 this_ptr->Pitch_AngleLimit();
                 this_ptr->Yaw_SetOutput_IMU();
                 this_ptr->Pitch_SetOutput_IMU();
-                if(this_ptr->pitch_motor->get_data_.nowState != DM_Motor_n::ENABLE)
+                if(this_ptr->pitch->motor->get_data_.nowState != DM_Motor_n::ENABLE)
                 {
-                    this_ptr->pitch_motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
+                    this_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
                 }
                 break;
                 // endregion

@@ -4,8 +4,7 @@
 namespace Config_n
 {
 /*============================== 代码层配置 ==============================*/
-#define IS_DEBUG_MODE 1u // 是否是debug模式，0为否，1为是，开启debug模式后，常规任务将被关闭，开启debug任务，一些debug变量也被赋予内存，方便ozone查看
-
+#define IS_DEBUG_MODE 0x01u // 是否是debug模式，0为否，1为是，开启debug模式后，常规任务将被关闭，开启debug任务，一些debug变量也被赋予内存，方便ozone查看
 
 /*============================== 设备层配置 ==============================*/
 /* region 发射机构 */
@@ -42,23 +41,34 @@ namespace Config_n
 // endregion
 
 /* region 云台 */
+// 电机算法
+#define GIMBAL_IS_USE_PID 0x00u
+
 // yaw GM6020
 #define YAW_MOTOR_PID_A_KP 6.0f
-#define YAW_MOTOR_PID_A_KI 0.0f
-#define YAW_MOTOR_PID_A_KD 0.2f
+#define YAW_MOTOR_PID_A_KI .0f
+#define YAW_MOTOR_PID_A_KD .2f
 #define YAW_MOTOR_PID_S_KP 3.0f
-#define YAW_MOTOR_PID_S_KI 0.0f
-#define YAW_MOTOR_PID_S_KD 0.3f
+#define YAW_MOTOR_PID_S_KI .0f
+#define YAW_MOTOR_PID_S_KD .3f
+#define YAW_MOTOR_PID_I_KI -0.0006f // 0.02
+#define YAW_MOTOR_LQR_1    10.0f    //{6, 0.175};  // 0.23}
+#define YAW_MOTOR_LQR_2    .198f
 #define YAW_MOTOR_SPEED_MAX_OUT 300
 #define YAW_ECD_MAX 8000
 #define YAW_ECD_MIN 5600
 
 // pitch DM电机
-#define PITCH_MOTOR_PID_A_KP 8.5f
-#define PITCH_MOTOR_PID_A_KI 0.0f
-#define PITCH_MOTOR_PID_A_KD 1.7f
-#define PITCH_POS_MAX  0.24  //8度
-#define PITCH_POS_MIN -0.75 //-40.5度
+#define PITCH_MOTOR_PID_A_KP 7.5f // 8.5f
+#define PITCH_MOTOR_PID_A_KI .0f
+#define PITCH_MOTOR_PID_A_KD 1.0f // 1.7f
+#define PITCH_MOTOR_PID_I_KI .0023f // 0.0031 // 0.0031   //0.00183,//0.00075, // 0.00075, // 0.0085, // 0.02
+#define PITCH_MOTOR_V        0.1f
+#define PITCH_MOTOR_T        0.0f
+#define PITCH_MOTOR_LQR_1    41.5f       // {32.0, -0.59}; // +,-
+#define PITCH_MOTOR_LQR_2    -0.77f      // 速度kp-0.00372 0.01572
+#define PITCH_POS_MAX        .24  //8度
+#define PITCH_POS_MIN        -0.75 //-40.5度
 
 // IMU BMI088
 
@@ -67,10 +77,10 @@ namespace Config_n
 
 /*============================== 应用层配置 ==============================*/
 /* region 云台灵敏度 */
-#define YAW_SENSOR_RC 0.0004f // 0.0006
-#define PITCH_SENSOR_RC 0.00042f// 0.00022f //发送给大妙为
-#define YAW_SENSOR_TC   0.001f
-#define PITCH_SENSOR_TC 0.001f
+#define YAW_SENSOR_RC .0004f // 0.0006
+#define PITCH_SENSOR_RC .00042f// 0.00022f //发送给大妙为
+#define YAW_SENSOR_TC   .001f
+#define PITCH_SENSOR_TC .001f
 // endregion
 
 /* region 弹速与弹频 */
@@ -79,9 +89,9 @@ namespace Config_n
 #define MAX_SHOOT_SPEED 6000.0f
 #define MIN_SHOOT_SPEED 3000.0f
 #define SPEED_SENSOR_RC 1.0f
-#define FREQ_SENSOR_RC 0.001f
+#define FREQ_SENSOR_RC .001f
 #define SPEED_SENSOR_TC 1.0f
-#define FREQ_SENSOR_TC 0.001f
+#define FREQ_SENSOR_TC .001f
 }
 
 #endif //CONFIG_HPP

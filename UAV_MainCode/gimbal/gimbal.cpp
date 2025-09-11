@@ -398,20 +398,20 @@ namespace Gimbal_n
         this->pitch->motor->HandOver(this->target_pitch,0,PITCH_MOTOR_PID_A_KP,PITCH_MOTOR_PID_A_KD,0);
     }
 
-    inline void Gimbal_c::Pitch_SetOutput_IMU()
+    inline void Gimbal_c::Pitch_SetOutput_IMU() // (O,o)! 添加lqr下的控制
     {
         this->pitch->motor->Torque();
         float _output = this->pitch->pid_angle->ECF_PID_Calculate(this->target_pitch, this->actual_pitch);
         this->pitch->motor->HandOver(0,0,0,0,_output);
     }
 
-    inline void Gimbal_c::Yaw_SetOutput_Encoder()
+    inline void Gimbal_c::Yaw_SetOutput_Encoder() // (O,o)! 添加lqr下的控制
     {
         this->yaw->motor->motor_settings.angle_feedback_source = Motor_General_Def_n::MOTOR_FEED;
         this->yaw->motor->DJIMotorSetRef(this->target_yaw);
     }
 
-    inline void Gimbal_c::Yaw_SetOutput_IMU()
+    inline void Gimbal_c::Yaw_SetOutput_IMU() // (O,o)! 添加lqr下的控制
     {
         if(this->yaw->motor->motor_settings.angle_feedback_source != Motor_General_Def_n::OTHER_FEED)
         {

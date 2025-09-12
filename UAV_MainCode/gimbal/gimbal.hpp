@@ -29,8 +29,12 @@ namespace Gimbal_n
 
         static Yaw_c* Get_InstancePtr(void);
 
+        void AngleLimit(void);
+        void SetOutput_Encoder(void);
+        void SetOutput_IMU(void);
+
     private:
-        float set_pos_ = 0; // 一般是设置的目标值
+        float set_pos_ = 0; // 一般是设置的目标值 // (O,o)! 可以改成指针
         float pos_error_ = 0;
         float pos_ = 0; // 当前位置
         float vel_ = 0; // 当前速度
@@ -53,6 +57,10 @@ namespace Gimbal_n
 
         static Pitch_c* Get_InstancePtr(void);
 
+        void AngleLimit(void);
+        void SetOutput_Encoder(void);
+        void SetOutput_IMU(void);
+
     private:
         float set_pos_ = 0; // 一般是设置的目标值
         float pos_error_ = 0;
@@ -74,6 +82,13 @@ namespace Gimbal_n
         Pitch_c             *pitch;
         BMI088Instance_c    *imu;
         const INS_t         *imu_date;
+
+        /* ctrl_date */
+        float actual_yaw   = 0.0f;
+        float actual_pitch = 0.0f;
+        float target_yaw   = 0.0f;
+        float target_pitch = 0.0f;
+
         // 看情况加滤波
 
         /* function */
@@ -86,11 +101,6 @@ namespace Gimbal_n
     private:
         /* state */
         Gimbal_State_e current_state = Disable;
-
-        float actual_yaw   = 0.0f;
-        float actual_pitch = 0.0f;
-        float target_yaw   = 0.0f;
-        float target_pitch = 0.0f;
 
         /* flag */
         bool is_loop = false;
@@ -112,13 +122,6 @@ namespace Gimbal_n
 
         void Change_PIDWithIMU(void);
         void Change_PIDWithEncoder(void);
-
-        void Yaw_AngleLimit(void);
-        void Yaw_SetOutput_Encoder(void);
-        void Yaw_SetOutput_IMU(void);
-        void Pitch_AngleLimit(void);
-        void Pitch_SetOutput_Encoder(void);
-        void Pitch_SetOutput_IMU(void);
 
         void Update_ActualAngle(void);
 

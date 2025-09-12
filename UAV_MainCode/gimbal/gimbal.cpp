@@ -12,7 +12,7 @@ namespace Gimbal_n
 #define DISABLE_TIME               0.5f   // 失能处理时间
 #define CHANGE_STATE_TIME          2.0f   // 摇杆切换状态时间
 
-    Gimbal_c* this_ptr = nullptr;
+    Gimbal_c* gimbal_ptr = nullptr;
     user_maths_c math_;
     // endregion
 
@@ -23,15 +23,15 @@ namespace Gimbal_n
         uint8_t rx_buf[8] = {0};
         memcpy(rx_buf, registerinstance->rx_buff, 8); // 存储数据，防止变化
 //        ins->pitch_motor->get_data_.id = (rx_buf[0]) & 0x0F;
-        this_ptr->pitch->motor->get_data_.nowState = (DM_Motor_n::DM_NowState_e)(rx_buf[0] >> 4);
+        gimbal_ptr->pitch->motor->get_data_.nowState = (DM_Motor_n::DM_NowState_e)(rx_buf[0] >> 4);
         p_int = (rx_buf[1] << 8) | rx_buf[2];
         v_int = (rx_buf[3] << 4) | (rx_buf[4] >> 4);
         t_int = ((rx_buf[4] & 0xF) << 8) | rx_buf[5];
-        this_ptr->pitch->motor->get_data_.mos_temperture = rx_buf[6];
-        this_ptr->pitch->motor->get_data_.motor_temperture = rx_buf[7];
-        this_ptr->pitch->motor->get_data_.postion = DM_Motor_n::uint_to_float(p_int, -2, 2, 16);    // (-12.5,12.5)
-        this_ptr->pitch->motor->get_data_.velocity = DM_Motor_n::uint_to_float(v_int, -45, 45, 12); // (-45.0,45.0)
-        this_ptr->pitch->motor->get_data_.toeque = DM_Motor_n::uint_to_float(t_int, -18, 18, 12);   //(-18.0,18.0)
+        gimbal_ptr->pitch->motor->get_data_.mos_temperture = rx_buf[6];
+        gimbal_ptr->pitch->motor->get_data_.motor_temperture = rx_buf[7];
+        gimbal_ptr->pitch->motor->get_data_.postion = DM_Motor_n::uint_to_float(p_int, -2, 2, 16);    // (-12.5,12.5)
+        gimbal_ptr->pitch->motor->get_data_.velocity = DM_Motor_n::uint_to_float(v_int, -45, 45, 12); // (-45.0,45.0)
+        gimbal_ptr->pitch->motor->get_data_.toeque = DM_Motor_n::uint_to_float(t_int, -18, 18, 12);   //(-18.0,18.0)
     }
     // endregion
 
@@ -39,7 +39,7 @@ namespace Gimbal_n
     Gimbal_c* Gimbal_c::Get_InstancePtr()
     {
         static Gimbal_c _instance;
-        this_ptr = &_instance;
+        gimbal_ptr = &_instance;
         return &_instance;
     }
 
@@ -147,9 +147,9 @@ namespace Gimbal_n
                                 .deadband = 5,
                         },
                         .speed_PID = {
-                                .Kp = 3,
-                                .Ki = 0,
-                                .Kd = 0.03,
+                                .Kp = YAW_MOTOR_PID_S_KP,
+                                .Ki = YAW_MOTOR_PID_S_KI,
+                                .Kd = YAW_MOTOR_PID_S_KD,
                                 .ActualValueSource = NULL,
                                 .mode = Output_Limit | Integral_Limit,
                                 .max_out = YAW_MOTOR_SPEED_MAX_OUT,
@@ -157,9 +157,9 @@ namespace Gimbal_n
                                 .deadband = 0.3,
                         },
                         .angle_PID = {
-                                .Kp = 6,
-                                .Ki = 0,
-                                .Kd = 0.2,
+                                .Kp = YAW_MOTOR_PID_A_KP,
+                                .Ki = YAW_MOTOR_PID_A_KI,
+                                .Kd = YAW_MOTOR_PID_A_KD,
                                 .ActualValueSource = NULL,
                                 .mode = Output_Limit | Integral_Limit,
                                 .max_out = 16000, // 角度转出角速度后最大为300
@@ -328,20 +328,34 @@ namespace Gimbal_n
 // endregion
 
     /* region 功能函数 */
+    /**
+     * @brief 6020参数转换,力矩转换成电压
+     *
+     */
+    float torque_to_voltage_6020(float torque)
+    {
+        float voltage = 0.0f;
+
+        float current = torque / 0.741f * 10000;
+        voltage = (current - 128.3507f) / 0.7778f;
+        voltage = math_.user_val_limit(voltage, -25000, 25000);
+        return voltage;
+    }
+
     inline void Gimbal_c::Change_PIDWithEncoder()
     {
         this->target_yaw = this->yaw->motor->MotorMeasure.measure.record_ecd;
         this->target_pitch = this->pitch->motor->get_data_.postion;
-        this->Yaw_SetOutput_Encoder();
-        this->Pitch_SetOutput_Encoder();
+        this->yaw->SetOutput_Encoder();
+        this->pitch->SetOutput_Encoder();
     }
 
     inline void Gimbal_c::Change_PIDWithIMU()
     {
         this->target_yaw = this->actual_yaw;
         this->target_pitch = this->actual_pitch;
-        this->Yaw_SetOutput_IMU();
-        this->Pitch_SetOutput_IMU();
+        this->yaw->SetOutput_IMU();
+        this->pitch->SetOutput_IMU();
     }
 
     inline void Gimbal_c::Update_ActualAngle()
@@ -352,33 +366,61 @@ namespace Gimbal_n
         this->actual_pitch = this->imu_date->Pitch;
     }
 
-    void Gimbal_c::Yaw_AngleLimit()
+    void Yaw_c::AngleLimit()
     {
         // math_.loop_fp32_constrain()
 
         // 转为int防止问题
-        float can_increased = (YAW_ECD_MAX - (int16_t)this->yaw->motor->MotorMeasure.measure.feedback_ecd) / 8192.0f * 360.0f;
-        float can_decreased = ((int16_t)this->yaw->motor->MotorMeasure.measure.feedback_ecd - YAW_ECD_MIN) / 8192.0f * 360.0f;
-        float yaw_min = this->actual_yaw - can_increased; // YAW周和编码值相反 ,yaw_min为正，yaw_max为负
-        float yaw_max = this->actual_yaw + can_decreased;
+        float can_increased = (YAW_ECD_MAX - (int16_t)this->motor->MotorMeasure.measure.feedback_ecd) / 8192.0f * 360.0f;
+        float can_decreased = ((int16_t)this->motor->MotorMeasure.measure.feedback_ecd - YAW_ECD_MIN) / 8192.0f * 360.0f;
+        float yaw_min = gimbal_ptr->actual_yaw - can_increased; // YAW周和编码值相反 ,yaw_min为正，yaw_max为负
+        float yaw_max = gimbal_ptr->actual_yaw + can_decreased;
         // yaw_min = filter_alg_n::Recursive_ave_filter(&yaw_filter, yaw_min,20);
         // yaw_max = filter_alg_n::Recursive_ave_filter(&yaw_filter, yaw_max,20);
-        if ((YAW_ECD_MAX - (int16_t)this->yaw->motor->MotorMeasure.measure.feedback_ecd) < -1500 ||
-        ((int16_t)this->yaw->motor->MotorMeasure.measure.feedback_ecd - YAW_ECD_MIN) < -1500)
+        if ((YAW_ECD_MAX - (int16_t)this->motor->MotorMeasure.measure.feedback_ecd) < -1500 ||
+        ((int16_t)this->motor->MotorMeasure.measure.feedback_ecd - YAW_ECD_MIN) < -1500)
         {
-            yaw->motor->DJIMotorStop(); // (O,o)! 需要修改急停方案
+            this->motor->DJIMotorStop(); // (O,o)! 需要修改急停方案
         }
-        this->target_yaw = math_.user_val_limit(this->target_yaw, yaw_min, yaw_max);
+        gimbal_ptr->target_yaw = math_.user_val_limit(gimbal_ptr->target_yaw, yaw_min, yaw_max);
         // 机头向前陀螺仪左正右负，编码值左小右大
         //  滤波
     }
 
-    void Gimbal_c::Pitch_AngleLimit()
+    void Yaw_c::SetOutput_Encoder()
     {
-        float can_increased = user_abs((PITCH_POS_MAX - this->pitch->motor->get_data_.postion) * RAD_TO_ANGLE);
-        float can_decreased = user_abs((this->pitch->motor->get_data_.postion - PITCH_POS_MIN) * RAD_TO_ANGLE);
-        float pitch_min = actual_pitch - can_decreased;
-        float pitch_max = actual_pitch + can_increased;
+        this->motor->motor_settings.close_loop_type = Motor_General_Def_n::ANGLE_AND_SPEED_LOOP;
+        this->motor->motor_settings.angle_feedback_source = Motor_General_Def_n::MOTOR_FEED;
+        this->motor->DJIMotorSetRef(gimbal_ptr->target_yaw * 22.7f);// 8192每一度为22.7 (O,o)!要宏定义
+    }
+
+    void Yaw_c::SetOutput_IMU()
+    {
+#if (GIMBAL_IS_USE_PID == 0x01u)
+        this->motor->motor_settings.close_loop_type = Motor_General_Def_n::OPEN_LOOP;
+        if(this->motor->motor_settings.angle_feedback_source != Motor_General_Def_n::OTHER_FEED)
+        {
+            this->motor->Set_ANGLE_PID_other_feedback(&gimbal_ptr->actual_yaw);
+        }
+        this->motor->DJIMotorSetRef(gimbal_ptr->target_yaw);
+#else
+        this->vel_ = this->motor->MotorMeasure.measure.feedback_speed;
+        this->pos_ = gimbal_ptr->actual_yaw;
+        this->set_pos_ = gimbal_ptr->target_yaw;
+        this->pos_error_ = math_.float_min_distance(this->set_pos_, this->pos_, -180.0f, 180.0f);
+        float yaw_system_state[2] = {(-this->pos_error_ / 57.295779513f), this->vel_}; // 输入目标差值与当前速度
+        this->lqr->ECF_LQR_Data_Update(yaw_system_state);
+        this->output_ = lqr->ECF_LQR_Calculate() + this->pid_i->ECF_PID_Calculate(this->set_pos_, this->pos_);
+        this->output_ = torque_to_voltage_6020(output_);
+#endif
+    }
+
+    void Pitch_c::AngleLimit()
+    {
+        float can_increased = user_abs((PITCH_POS_MAX - this->motor->get_data_.postion) * RAD_TO_ANGLE);
+        float can_decreased = user_abs((this->motor->get_data_.postion - PITCH_POS_MIN) * RAD_TO_ANGLE);
+        float pitch_min = gimbal_ptr->actual_pitch - can_decreased;
+        float pitch_max = gimbal_ptr->actual_pitch + can_increased;
         // 滤波
         // pitch_min = filter_alg_n::Recursive_ave_filter(&pitch_filter, pitch_min,20);
         // pitch_max = filter_alg_n::Recursive_ave_filter(&pitch_filter, pitch_max,20);
@@ -389,35 +431,34 @@ namespace Gimbal_n
         //     // pitch_max = actual_pitch - 5;
         //     // pitch_min = actual_pitch + 5;
         // }
-        this->target_pitch = math_.user_val_limit(this->target_pitch, pitch_min, pitch_max);
+        gimbal_ptr->target_pitch = math_.user_val_limit(gimbal_ptr->target_pitch, pitch_min, pitch_max);
     }
 
-    inline void Gimbal_c::Pitch_SetOutput_Encoder()
+    void Pitch_c::SetOutput_Encoder()
     {
-        this->pitch->motor->Postion();
-        this->pitch->motor->HandOver(this->target_pitch,0,PITCH_MOTOR_PID_A_KP,PITCH_MOTOR_PID_A_KD,0);
+        this->motor->Postion();
+        this->motor->HandOver(gimbal_ptr->target_pitch,0,PITCH_MOTOR_PID_A_KP,PITCH_MOTOR_PID_A_KD,0);
     }
 
-    inline void Gimbal_c::Pitch_SetOutput_IMU() // (O,o)! 添加lqr下的控制
+    void Pitch_c::SetOutput_IMU()
     {
-        this->pitch->motor->Torque();
-        float _output = this->pitch->pid_angle->ECF_PID_Calculate(this->target_pitch, this->actual_pitch);
-        this->pitch->motor->HandOver(0,0,0,0,_output);
-    }
-
-    inline void Gimbal_c::Yaw_SetOutput_Encoder() // (O,o)! 添加lqr下的控制
-    {
-        this->yaw->motor->motor_settings.angle_feedback_source = Motor_General_Def_n::MOTOR_FEED;
-        this->yaw->motor->DJIMotorSetRef(this->target_yaw);
-    }
-
-    inline void Gimbal_c::Yaw_SetOutput_IMU() // (O,o)! 添加lqr下的控制
-    {
-        if(this->yaw->motor->motor_settings.angle_feedback_source != Motor_General_Def_n::OTHER_FEED)
-        {
-            this->yaw->motor->Set_ANGLE_PID_other_feedback(&this->actual_yaw);
-        }
-        this->yaw->motor->DJIMotorSetRef(this->target_yaw);
+#if (GIMBAL_IS_USE_PID == 0x01u)
+        this->output_ = this->pid_angle->ECF_PID_Calculate(gimbal_ptr->target_pitch, gimbal_ptr->actual_pitch);
+        this->motor->Speed();
+        this->motor->HandOver(0,this->output_,0,0,0);
+#else
+        this->vel_ = this->motor->get_data_.velocity;
+        this->pos_ = gimbal_ptr->actual_pitch;
+        this->set_pos_ = gimbal_ptr->target_pitch;
+        this->pos_error_ = math_.float_min_distance(this->set_pos_, this->pos_, -90, 90.0f);
+        // 力控好用
+        float toque_system_state[2] = {pos_error_ / 57.295779513f, vel_};
+        this->lqr->ECF_LQR_Data_Update(toque_system_state);
+        this->output_ = this->lqr->ECF_LQR_Calculate() + this->pid_i->ECF_PID_Calculate(this->set_pos_, this->pos_); // + pitch_gravity_compensate(pos_); (O,o)! pitch补偿
+        this->output_ = math_.user_val_limit(output_, -7.0f, 7.0f); // 中间变量
+        this->motor->Torque();
+        this->motor->HandOver(0,0,0,0,this->output_);
+#endif
     }
 
     inline void Gimbal_c::CtrlMove_DR16()
@@ -504,24 +545,24 @@ namespace Gimbal_n
     void StateLoop(void)
     {
         // 确定启动
-        if(this_ptr == nullptr)return;
-        if(!this_ptr->is_loop)return;
+        if(gimbal_ptr == nullptr)return;
+        if(!gimbal_ptr->is_loop)return;
 
         // 更新数据
-        this_ptr->Update_ActualAngle();
+        gimbal_ptr->Update_ActualAngle();
 
         // 检查遥控连接
-        RobotCMD_n::RobotCMD_ConnectState_e _connect_state = this_ptr->cmd_instance->connect_state; // 缓存连接状态，不要运行的时候切换连接了
+        RobotCMD_n::RobotCMD_ConnectState_e _connect_state = gimbal_ptr->cmd_instance->connect_state; // 缓存连接状态，不要运行的时候切换连接了
         if(_connect_state == RobotCMD_n::NOT_CONNECT)
         {
-            this_ptr->ChangeState(Disable);
-            this_ptr->yaw->motor->DJIMotorStop();
-            this_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_UNABLE);
+            gimbal_ptr->ChangeState(Disable);
+            gimbal_ptr->yaw->motor->DJIMotorStop();
+            gimbal_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_UNABLE);
             return;
         }
 
         // 状态机
-        switch (this_ptr->current_state)
+        switch (gimbal_ptr->current_state)
         {
             case Disable: // region Disable
                 /* * * * * * * * * * * * * * * * * ctrl with DR16
@@ -537,36 +578,36 @@ namespace Gimbal_n
                  */
                 if(_connect_state == RobotCMD_n::TC_CMD)
                 {
-                    this_ptr->ChangeState(ControlWithIMU);
+                    gimbal_ptr->ChangeState(ControlWithIMU);
                     return;
                 }
-                if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_MIDDLE)
+                if(gimbal_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_MIDDLE)
                 {
-                    this_ptr->ChangeState(ControlWithIMU);
+                    gimbal_ptr->ChangeState(ControlWithIMU);
                     return;
                 }
-                if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_HIGH)
+                if(gimbal_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_HIGH)
                 {
-                    this_ptr->ChangeState(AutoControl);
+                    gimbal_ptr->ChangeState(AutoControl);
                     return;
                 }
-                if(this_ptr->timer_delta_t < DISABLE_TIME)
+                if(gimbal_ptr->timer_delta_t < DISABLE_TIME)
                 {
-                    this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
-                    this_ptr->yaw->motor->DJIMotorEnable();
-                    this_ptr->Yaw_AngleLimit();
-                    this_ptr->Pitch_AngleLimit();
-                    this_ptr->Yaw_SetOutput_Encoder();
-                    this_ptr->Pitch_SetOutput_Encoder();
-                    if(this_ptr->pitch->motor->get_data_.nowState != DM_Motor_n::ENABLE)
+                    gimbal_ptr->timer_delta_t += gimbal_ptr->timer_instance->ECF_DWT_GetDeltaT(&gimbal_ptr->timer_cnt);
+                    gimbal_ptr->yaw->motor->DJIMotorEnable();
+                    gimbal_ptr->yaw->AngleLimit();
+                    gimbal_ptr->pitch->AngleLimit();
+                    gimbal_ptr->yaw->SetOutput_Encoder();
+                    gimbal_ptr->pitch->SetOutput_Encoder();
+                    if(gimbal_ptr->pitch->motor->get_data_.nowState != DM_Motor_n::ENABLE)
                     {
-                        this_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE); // (O,o)! 设置状态要在发送缓冲区填充后
+                        gimbal_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE); // (O,o)! 设置状态要在发送缓冲区填充后
                     }
                 }
                 else
                 {
-                    this_ptr->yaw->motor->DJIMotorStop();
-                    this_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_UNABLE); // (O,o)? 失能下CAN总线仍会发送信息，是否有问题
+                    gimbal_ptr->yaw->motor->DJIMotorStop();
+                    gimbal_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_UNABLE); // (O,o)? 失能下CAN总线仍会发送信息，是否有问题
                 }
                 break;
                 // endregion
@@ -586,43 +627,43 @@ namespace Gimbal_n
                  */
                 if (_connect_state == RobotCMD_n::TC_CMD)
                 {
-                    this_ptr->ChangeState(ControlWithIMU);
+                    gimbal_ptr->ChangeState(ControlWithIMU);
                     return;
                 }
-                this_ptr->yaw->motor->DJIMotorEnable();
-                if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_LOW)
+                gimbal_ptr->yaw->motor->DJIMotorEnable();
+                if(gimbal_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_LOW)
                 {
-                    this_ptr->ChangeState(Disable);
+                    gimbal_ptr->ChangeState(Disable);
                     return;
                 }
-                if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_HIGH)
+                if(gimbal_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_HIGH)
                 {
-                    this_ptr->ChangeState(AutoControl);
+                    gimbal_ptr->ChangeState(AutoControl);
                     return;
                 }
-                if(this_ptr->cmd_instance->Get_RC_LJoyLRValue() < 640 && this_ptr->cmd_instance->Get_RC_LJoyUDValue() > 640)
+                if(gimbal_ptr->cmd_instance->Get_RC_LJoyLRValue() < 640 && gimbal_ptr->cmd_instance->Get_RC_LJoyUDValue() > 640)
                 {
-                    if(this_ptr->timer_delta_t < CHANGE_STATE_TIME)
+                    if(gimbal_ptr->timer_delta_t < CHANGE_STATE_TIME)
                     {
-                        this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
+                        gimbal_ptr->timer_delta_t += gimbal_ptr->timer_instance->ECF_DWT_GetDeltaT(&gimbal_ptr->timer_cnt);
                     }
                     else
                     {
-                        this_ptr->ChangeState(ControlWithIMU);
+                        gimbal_ptr->ChangeState(ControlWithIMU);
                     }
                 }
                 else
                 {
-                    this_ptr->timer_delta_t = 0;
+                    gimbal_ptr->timer_delta_t = 0;
                 }
-                this_ptr->CtrlMove_DR16();
-                this_ptr->Yaw_AngleLimit();
-                this_ptr->Pitch_AngleLimit();
-                this_ptr->Yaw_SetOutput_Encoder();
-                this_ptr->Pitch_SetOutput_Encoder();
-                if(this_ptr->pitch->motor->get_data_.nowState != DM_Motor_n::ENABLE)
+                gimbal_ptr->CtrlMove_DR16();
+                gimbal_ptr->yaw->AngleLimit();
+                gimbal_ptr->pitch->AngleLimit();
+                gimbal_ptr->yaw->SetOutput_Encoder();
+                gimbal_ptr->pitch->SetOutput_Encoder();
+                if(gimbal_ptr->pitch->motor->get_data_.nowState != DM_Motor_n::ENABLE)
                 {
-                    this_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
+                    gimbal_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
                 }
                 break;
                 // endregion
@@ -644,52 +685,52 @@ namespace Gimbal_n
                  * 调用限位检测函数
                  * pitch 角度环计算，填充发送数据
                  */
-                this_ptr->yaw->motor->DJIMotorEnable();
+                gimbal_ptr->yaw->motor->DJIMotorEnable();
                 if(_connect_state == RobotCMD_n::TC_CMD)
                 {
-                    if(this_ptr->cmd_instance->Check_TC_KeyDown('r',this_ptr->cmd_instance->TC_cmd->mouse.press_r))
+                    if(gimbal_ptr->cmd_instance->Check_TC_KeyDown('r',gimbal_ptr->cmd_instance->TC_cmd->mouse.press_r))
                     {
-                        this_ptr->ChangeState(AutoControl);
+                        gimbal_ptr->ChangeState(AutoControl);
                         return;
                     }
-                    this_ptr->CtrlMove_TC();
+                    gimbal_ptr->CtrlMove_TC();
                 }
                 else
                 {
-                    if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_LOW)
+                    if(gimbal_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_LOW)
                     {
-                        this_ptr->ChangeState(Disable);
+                        gimbal_ptr->ChangeState(Disable);
                         return;
                     }
-                    else if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_HIGH)
+                    else if(gimbal_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_HIGH)
                     {
-                        this_ptr->ChangeState(AutoControl);
+                        gimbal_ptr->ChangeState(AutoControl);
                         return;
                     }
-                    if(this_ptr->cmd_instance->Get_RC_LJoyLRValue() > 640 && this_ptr->cmd_instance->Get_RC_LJoyUDValue() < -640)
+                    if(gimbal_ptr->cmd_instance->Get_RC_LJoyLRValue() > 640 && gimbal_ptr->cmd_instance->Get_RC_LJoyUDValue() < -640)
                     {
-                        if(this_ptr->timer_delta_t < CHANGE_STATE_TIME)
+                        if(gimbal_ptr->timer_delta_t < CHANGE_STATE_TIME)
                         {
-                            this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
+                            gimbal_ptr->timer_delta_t += gimbal_ptr->timer_instance->ECF_DWT_GetDeltaT(&gimbal_ptr->timer_cnt);
                         }
                         else
                         {
-                            this_ptr->ChangeState(ControlWithEncoder);
+                            gimbal_ptr->ChangeState(ControlWithEncoder);
                         }
                     }
                     else
                     {
-                        this_ptr->timer_delta_t = 0;
+                        gimbal_ptr->timer_delta_t = 0;
                     }
-                    this_ptr->CtrlMove_DR16();
+                    gimbal_ptr->CtrlMove_DR16();
                 }
-                this_ptr->Yaw_AngleLimit();
-                this_ptr->Pitch_AngleLimit();
-                this_ptr->Yaw_SetOutput_IMU();
-                this_ptr->Pitch_SetOutput_IMU();
-                if(this_ptr->pitch->motor->get_data_.nowState != DM_Motor_n::ENABLE)
+                gimbal_ptr->yaw->AngleLimit();
+                gimbal_ptr->pitch->AngleLimit();
+                gimbal_ptr->yaw->SetOutput_IMU();
+                gimbal_ptr->pitch->SetOutput_IMU();
+                if(gimbal_ptr->pitch->motor->get_data_.nowState != DM_Motor_n::ENABLE)
                 {
-                    this_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
+                    gimbal_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
                 }
                 break;
                 // endregion
@@ -708,335 +749,42 @@ namespace Gimbal_n
                  * 调用限位检测函数
                  * pitch 角度环计算，填充发送数据
                  */
-                this_ptr->yaw->motor->DJIMotorEnable();
+                gimbal_ptr->yaw->motor->DJIMotorEnable();
                 if(_connect_state == RobotCMD_n::TC_CMD)
                 {
-                    if(this_ptr->cmd_instance->Check_TC_KeyUp('r',this_ptr->cmd_instance->TC_cmd->mouse.press_r))
+                    if(gimbal_ptr->cmd_instance->Check_TC_KeyUp('r',gimbal_ptr->cmd_instance->TC_cmd->mouse.press_r))
                     {
-                        this_ptr->ChangeState(ControlWithIMU);
+                        gimbal_ptr->ChangeState(ControlWithIMU);
                         return;
                     }
                 }
                 else
                 {
-                    if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_LOW)
+                    if(gimbal_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_LOW)
                     {
-                        this_ptr->ChangeState(Disable);
+                        gimbal_ptr->ChangeState(Disable);
                         return;
                     }
-                    else if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_MIDDLE)
+                    else if(gimbal_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_MIDDLE)
                     {
-                        this_ptr->ChangeState(ControlWithIMU);
+                        gimbal_ptr->ChangeState(ControlWithIMU);
                         return;
                     }
                 }
-                this_ptr->CtrlMove_Auto();
-                this_ptr->Yaw_AngleLimit();
-                this_ptr->Pitch_AngleLimit();
-                this_ptr->Yaw_SetOutput_IMU();
-                this_ptr->Pitch_SetOutput_IMU();
-                if(this_ptr->pitch->motor->get_data_.nowState != DM_Motor_n::ENABLE)
+                gimbal_ptr->CtrlMove_Auto();
+                gimbal_ptr->yaw->AngleLimit();
+                gimbal_ptr->pitch->AngleLimit();
+                gimbal_ptr->yaw->SetOutput_IMU();
+                gimbal_ptr->pitch->SetOutput_IMU();
+                if(gimbal_ptr->pitch->motor->get_data_.nowState != DM_Motor_n::ENABLE)
                 {
-                    this_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
+                    gimbal_ptr->pitch->motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
                 }
                 break;
                 // endregion
             default:
                 break;
         }
-
-        // region 旧逻辑
-//        if(this_ptr->cmd_instance->connect_state == RobotCMD_n::DR16_CMD) // DT7下的状态机
-//        {
-//            switch (this_ptr->current_state)
-//            {
-//                case Disable: // region Disable
-//                    /*
-//                     * 检测 拨杆居中 切换 CWI 状态
-//                     * 检测 拨杆上拨 切换 Auto 状态
-//                     * 计时器未到指定时间 调用限位检测函数
-//                     * 计时器未到指定时间 pitch 填充发送数据
-//                     * 计时器未到指定时间 计时器计时
-//                     * 计时器未到指定时间 两电机使能
-//                     * 计时器到指定时间 两电机失能
-//                     */
-//                    if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_MIDDLE)
-//                    {
-//                        this_ptr->ChangeState(ControlWithIMU);
-//                        return;
-//                    }
-//                    if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_HIGH)
-//                    {
-//                        this_ptr->ChangeState(AutoControl);
-//                        return;
-//                    }
-//                    if(this_ptr->timer_delta_t < DISABLE_TIME)
-//                    {
-//                        this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
-//                        this_ptr->yaw_motor->DJIMotorEnable();
-//                        this_ptr->Yaw_AngleLimit();
-//                        this_ptr->Pitch_AngleLimit();
-//                        this_ptr->Yaw_SetOutput_Encoder();
-//                        this_ptr->Pitch_SetOutput_Encoder();
-//                        if(this_ptr->pitch_motor->get_data_.nowState != DM_Motor_n::ENABLE)
-//                        {
-//                            this_ptr->pitch_motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE); // (O,o)! 设置状态要在发送缓冲区填充后
-//                        }
-//                    }
-//                    else
-//                    {
-//                        this_ptr->yaw_motor->DJIMotorStop();
-//                        this_ptr->pitch_motor->DMMotorStateSet(DM_Motor_n::DM_UNABLE); // (O,o)? 失能下CAN总线仍会发送信息，是否有问题
-//                    }
-//                    break;
-//                    // endregion
-//                case ControlWithEncoder: // region ControlWithEncoder
-//                    /*
-//                     * 电机使能
-//                     * 调用CtrlMove函数，更新目标值
-//                     * 调用限位检测函数
-//                     * 填充发送数据
-//                     * 检测 拨杆下拨 切换 Disable 状态
-//                     * 检测 拨杆上拨 切换 Auto 状态
-//                     * 检测 左拨杆右上角 计时器计时
-//                     * 检测 左拨杆右上角 计时器到指定时间 切换 CWI 状态
-//                     * 检测 左拨杆不在右上角 计时器清零
-//                     */
-//                    this_ptr->yaw_motor->DJIMotorEnable();
-//                    if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_LOW)
-//                    {
-//                        this_ptr->ChangeState(Disable);
-//                        return;
-//                    }
-//                    if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_HIGH)
-//                    {
-//                        this_ptr->ChangeState(AutoControl);
-//                        return;
-//                    }
-//                    if(this_ptr->cmd_instance->Get_RC_LJoyLRValue() < 640 && this_ptr->cmd_instance->Get_RC_LJoyUDValue() > 640)
-//                    {
-//                        if(this_ptr->timer_delta_t < CHANGE_STATE_TIME)
-//                        {
-//                            this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
-//                        }
-//                        else
-//                        {
-//                            this_ptr->ChangeState(ControlWithIMU);
-//                        }
-//                    }
-//                    else
-//                    {
-//                        this_ptr->timer_delta_t = 0;
-//                    }
-//                    this_ptr->CtrlMove_DR16();
-//                    this_ptr->Yaw_AngleLimit();
-//                    this_ptr->Pitch_AngleLimit();
-//                    this_ptr->Yaw_SetOutput_Encoder();
-//                    this_ptr->Pitch_SetOutput_Encoder();
-//                    if(this_ptr->pitch_motor->get_data_.nowState != DM_Motor_n::ENABLE)
-//                    {
-//                        this_ptr->pitch_motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
-//                    }
-//                    break;
-//                    // endregion
-//                case ControlWithIMU: // region ControlWithIMU
-//                    /*
-//                     * 电机使能
-//                     * 调用CtrlMove函数，更新目标值
-//                     * 调用限位检测函数
-//                     * pitch 角度环计算，填充发送数据
-//                     * 检测 拨杆下拨 切换 Disable 状态
-//                     * 检测 拨杆上拨 切换 Auto 状态
-//                     * 检测 左拨杆右下角 计时器计时
-//                     * 检测 左拨杆右下角 计时器到指定时间 切换 CWE 状态
-//                     * 检测 左拨杆不在右下角 计时器清零
-//                     */
-//                    this_ptr->yaw_motor->DJIMotorEnable();
-//                    if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_LOW)
-//                    {
-//                        this_ptr->ChangeState(Disable);
-//                        return;
-//                    }
-//                    else if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_HIGH)
-//                    {
-//                        this_ptr->ChangeState(AutoControl);
-//                        return;
-//                    }
-//                    if(this_ptr->cmd_instance->Get_RC_LJoyLRValue() > 640 && this_ptr->cmd_instance->Get_RC_LJoyUDValue() < -640)
-//                    {
-//                        if(this_ptr->timer_delta_t < CHANGE_STATE_TIME)
-//                        {
-//                            this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
-//                        }
-//                        else
-//                        {
-//                            this_ptr->ChangeState(ControlWithEncoder);
-//                        }
-//                    }
-//                    else
-//                    {
-//                        this_ptr->timer_delta_t = 0;
-//                    }
-//                    this_ptr->CtrlMove_DR16();
-//                    this_ptr->Yaw_AngleLimit();
-//                    this_ptr->Pitch_AngleLimit();
-//                    this_ptr->Yaw_SetOutput_IMU();
-//                    this_ptr->Pitch_SetOutput_IMU();
-//                    if(this_ptr->pitch_motor->get_data_.nowState != DM_Motor_n::ENABLE)
-//                    {
-//                        this_ptr->pitch_motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
-//                    }
-//                    break;
-//                    // endregion
-//                case AutoControl: // region AutoControl
-//                    /*
-//                     * 电机使能
-//                     * 调用CtrlMove_Auto函数，更新目标值
-//                     * 调用限位检测函数
-//                     * pitch 角度环计算，填充发送数据
-//                     * 检测 拨杆下拨 切换 Disable 状态
-//                     * 检测 拨杆居中 切换 CWI 状态
-//                     */
-//                    this_ptr->yaw_motor->DJIMotorEnable();
-//                    if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_LOW)
-//                    {
-//                        this_ptr->ChangeState(Disable);
-//                        return;
-//                    }
-//                    else if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_MIDDLE)
-//                    {
-//                        this_ptr->ChangeState(ControlWithIMU);
-//                        return;
-//                    }
-//                    this_ptr->CtrlMove_Auto();
-//                    this_ptr->Yaw_AngleLimit();
-//                    this_ptr->Pitch_AngleLimit();
-//                    this_ptr->Yaw_SetOutput_IMU();
-//                    this_ptr->Pitch_SetOutput_IMU();
-//                    if(this_ptr->pitch_motor->get_data_.nowState != DM_Motor_n::ENABLE)
-//                    {
-//                        this_ptr->pitch_motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
-//                    }
-//                    break;
-//                    // endregion
-//                default:
-//                    break;
-//            }
-//        }
-//        else if(this_ptr->cmd_instance->connect_state == RobotCMD_n::TC_CMD) // TC下的状态机
-//        {
-//            switch (this_ptr->current_state)
-//            {
-//                case Disable: // region Disable
-//                    /*
-//                     * 检测到连接直接进入CWI
-//                     */
-//                    this_ptr->ChangeState(ControlWithIMU);
-//                    return;
-//                    // endregion
-//                case ControlWithEncoder: // region ControlWithEncoder
-//                    /*
-//                     * 搁置此状态
-//                     */
-//                    this_ptr->ChangeState(ControlWithIMU);
-//                    return;
-////                    this_ptr->yaw_motor->DJIMotorEnable();
-////                    if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_LOW)
-////                    {
-////                        this_ptr->ChangeState(Disable);
-////                        return;
-////                    }
-////                    if(this_ptr->cmd_instance->Get_RC_SW1State() == RobotCMD_n::CMD_HIGH)
-////                    {
-////                        this_ptr->ChangeState(AutoControl);
-////                        return;
-////                    }
-////                    if(this_ptr->cmd_instance->Get_RC_LJoyLRValue() < -640 && this_ptr->cmd_instance->Get_RC_LJoyUDValue() > 640)
-////                    {
-////                        if(this_ptr->timer_delta_t < CHANGE_STATE_TIME)
-////                        {
-////                            this_ptr->timer_delta_t += this_ptr->timer_instance->ECF_DWT_GetDeltaT(&this_ptr->timer_cnt);
-////                        }
-////                        else
-////                        {
-////                            this_ptr->ChangeState(ControlWithIMU);
-////                        }
-////                    }
-////                    else
-////                    {
-////                        this_ptr->timer_delta_t = 0;
-////                    }
-////                    /* CtrlMove */
-////                    this_ptr->Yaw_AngleLimit();
-////                    this_ptr->Pitch_AngleLimit();
-////                    this_ptr->Yaw_SetOutput_Encoder();
-////                    this_ptr->Pitch_SetOutput_Encoder();
-////                    if(this_ptr->pitch_motor->get_data_.nowState != DM_Motor_n::ENABLE)
-////                    {
-////                        this_ptr->pitch_motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
-////                    }
-//                    // endregion
-//                case ControlWithIMU: // region ControlWithIMU
-//                    /*
-//                     * 电机使能
-//                     * 调用CtrlMove函数，更新目标值
-//                     * 调用限位检测函数
-//                     * pitch 角度环计算，填充发送数据
-//                     * 检测 右键 按下，切换Auto状态
-//                     */
-//                    this_ptr->yaw_motor->DJIMotorEnable();
-//                    if(this_ptr->cmd_instance->Check_TC_KeyDown('r',this_ptr->cmd_instance->TC_cmd->mouse.press_r))
-//                    {
-//                        this_ptr->ChangeState(AutoControl);
-//                        return;
-//                    }
-//                    this_ptr->CtrlMove_TC();
-//                    this_ptr->Yaw_AngleLimit();
-//                    this_ptr->Pitch_AngleLimit();
-//                    this_ptr->Yaw_SetOutput_IMU();
-//                    this_ptr->Pitch_SetOutput_IMU();
-//                    if(this_ptr->pitch_motor->get_data_.nowState != DM_Motor_n::ENABLE)
-//                    {
-//                        this_ptr->pitch_motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
-//                    }
-//                    break;
-//                    // endregion
-//                case AutoControl: // region AutoControl
-//                    /*
-//                     * 电机使能
-//                     * 调用CtrlMove_Auto函数，更新目标值
-//                     * 调用限位检测函数
-//                     * pitch 角度环计算，填充发送数据
-//                     * 检测 右键 松开，切换CWI状态
-//                     */
-//                    this_ptr->yaw_motor->DJIMotorEnable();
-//                    if(this_ptr->cmd_instance->Check_TC_KeyUp('r',this_ptr->cmd_instance->TC_cmd->mouse.press_r))
-//                    {
-//                        this_ptr->ChangeState(ControlWithIMU);
-//                        return;
-//                    }
-//                    this_ptr->CtrlMove_Auto();
-//                    this_ptr->Yaw_AngleLimit();
-//                    this_ptr->Pitch_AngleLimit();
-//                    this_ptr->Yaw_SetOutput_IMU();
-//                    this_ptr->Pitch_SetOutput_IMU();
-//                    if(this_ptr->pitch_motor->get_data_.nowState != DM_Motor_n::ENABLE)
-//                    {
-//                        this_ptr->pitch_motor->DMMotorStateSet(DM_Motor_n::DM_ENABLE);
-//                    }
-//                    break;
-//                    // endregion
-//                default:
-//                    break;
-//            }
-//        }
-//        else
-//        {
-//            this_ptr->ChangeState(Disable);
-//            this_ptr->yaw_motor->DJIMotorStop();
-//            this_ptr->pitch_motor->DMMotorStateSet(DM_Motor_n::DM_UNABLE);
-//        }
-        // endregion
     }
 // endregion
 }

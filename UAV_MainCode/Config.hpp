@@ -4,8 +4,8 @@
 namespace Config_n
 {
 /*============================== 代码层配置 ==============================*/
-#define IS_DEBUG_MODE 0x01u // 是否是debug模式，0为否，1为是，开启debug模式后，常规任务将被关闭，开启debug任务，一些debug变量也被赋予内存，方便ozone查看
-
+#define IS_DEBUG_MODE     0x01u // 是否是debug模式，0为否，1为是，开启debug模式后，常规任务将被关闭，开启debug任务，一些debug变量也被赋予内存，方便ozone查看
+#define GIMBAL_IS_USE_PID 0x01u // 云台是否采用PID调控方式，0为lqr调控，1为pid调控
 /*============================== 设备层配置 ==============================*/
 /* region 发射机构 */
 // 摩擦轮
@@ -41,9 +41,6 @@ namespace Config_n
 // endregion
 
 /* region 云台 */
-// 电机算法
-#define GIMBAL_IS_USE_PID 0x00u
-
 // yaw GM6020
 #define YAW_MOTOR_PID_A_KP 6.0f
 #define YAW_MOTOR_PID_A_KI .0f
